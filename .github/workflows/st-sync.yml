@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      # (every gh command acts on the fork; with an "upstream" remote, gh would otherwise pick the parent repo)
+      GH_REPO: ${{ github.repository }}
       UPSTREAM: joseluis9595/lovelace-navbar-card
     steps:
       - uses: actions/checkout@v4
