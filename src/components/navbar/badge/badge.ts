@@ -68,9 +68,12 @@ export class Badge {
   /**
    * ST fork: a colour string is a strip of coloured dots under the label, one per comma-separated colour
    * (`var(--purple-color),var(--amber-color)`; commas inside `rgba(...)` etc. kept) - one colour, one dot. `null` for
-   * a JS template (`[[[`) or no colour.
+   * a JS template (`[[[`), no colour, or a badge with an icon or a count (upstream's badge then).
    */
   get colors(): string[] | null {
+    // (a badge with an icon or a count keeps upstream's look: the strip is for colour-only badges)
+    const b = this._route.data.badge;
+    if (b?.icon != null || b?.count != null) return null;
     const result = processTemplate<string>(
       this._navbarCard._hass,
       this._navbarCard,

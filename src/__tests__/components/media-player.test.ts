@@ -313,7 +313,7 @@ describe('MediaPlayer', () => {
       );
       expect(playButton).toBeTruthy();
       const playIcon = playButton?.querySelector('ha-icon');
-      expect(playIcon?.getAttribute('icon')).toBe('mdi:play');
+      expect(playIcon?.getAttribute('icon')).toBe('ios:play-fill');
     });
 
     it('should render pause button when playing', async () => {
@@ -328,7 +328,7 @@ describe('MediaPlayer', () => {
       );
       expect(pauseButton).toBeTruthy();
       const pauseIcon = pauseButton?.querySelector('ha-icon');
-      expect(pauseIcon?.getAttribute('icon')).toBe('mdi:pause');
+      expect(pauseIcon?.getAttribute('icon')).toBe('ios:pause-fill');
     });
 
     it('should render skip next button', async () => {
@@ -340,7 +340,7 @@ describe('MediaPlayer', () => {
       const skipButton = container.querySelector('.media-player-button-skip');
       expect(skipButton).toBeTruthy();
       const skipIcon = skipButton?.querySelector('ha-icon');
-      expect(skipIcon?.getAttribute('icon')).toBe('mdi:skip-next');
+      expect(skipIcon?.getAttribute('icon')).toBe('ios:forward-fill');
     });
 
     it('should render media information', async () => {

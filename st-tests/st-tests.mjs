@@ -32,6 +32,7 @@ async function card(config, states, calls = []) {
     { url: '/lovelace/b', icon: 'mdi:b', label: 'B', badge: { show: true, color: 'var(--purple-color),var(--amber-color)' } },
     { url: '/lovelace/c', icon: 'mdi:c', label: 'C', badge: { show: true, color: 'rgba(1, 2, 3, 0.5)' } },
     { url: '/lovelace/d', icon: 'mdi:d', label: 'D', badge: { show: true, count: '3' } },
+    { url: '/lovelace/e', icon: 'mdi:e', label: 'E', badge: { show: true, color: 'red', icon: 'mdi:lock' } },
   ] }, {});
   const routes = [...r.querySelectorAll('.route')];
   const dots = i => [...routes[i].querySelectorAll('.badge.badge-multi .badge-dot')].map(d => d.style.backgroundColor || d.getAttribute('style'));
@@ -39,6 +40,7 @@ async function card(config, states, calls = []) {
   ok('a colour with commas inside (rgba): one dot', dots(2).length === 1, dots(2));
   ok('the strip after the label, outside the button', routes.every(x => !x.querySelector('.button .badge-multi')) && routes[1].lastElementChild?.classList.contains('badge-multi'));
   ok('a counter badge without a colour: as upstream (in the button)', !!routes[3].querySelector('.button .badge') && !routes[3].querySelector('.badge-multi'));
+  ok('an icon badge with a colour: upstream\'s coloured icon badge, not a strip', !!routes[4].querySelector('.button .badge.with-icon') && !routes[4].querySelector('.badge-multi'));
   ok('no crash on CSS-variable colours', !errors.length, errors);
   const css = [...r.querySelectorAll('style')].map(s => s.textContent).join('\n');
   ok('2: tabs leave room for the strip (overflow visible, padding-bottom 12px)', /overflow: visible;\s*padding-bottom: 12px;/.test(css));
