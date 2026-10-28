@@ -1,0 +1,86 @@
+# ST fork: follow upstream releases. Daily (and on demand, and on every push to st-navbar): merge the newest upstream
+# release into st-navbar, build it, run upstream's tests and the fork's own (st-tests), and publish a release
+# (vX.Y.Z-st.N, with navbar-card.js) that Home Assistant's update.navbar_card_st_fork installs. A merge conflict or a
+# failing test opens an issue instead; nothing is released.
+name: ST - follow upstream
+on:
+  schedule:
+    - cron: "23 10 * * *"
+  workflow_dispatch:
+  push:
+    branches: [st-navbar]
+permissions:
+  contents: write
+  issues: write
+concurrency: st-sync
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      UPSTREAM: joseluis9595/lovelace-navbar-card
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: st-navbar
+          fetch-depth: 0
+      - name: Merge the newest upstream release
+        id: merge
+        run: |
+          git config user.name "st-navbar sync"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+          git fetch -q upstream --tags --force
+          TAG=$(gh release view -R "$UPSTREAM" --json tagName -q .tagName)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if git merge-base --is-ancestor "$TAG" HEAD; then
+            echo "result=current" >> "$GITHUB_OUTPUT"
+          elif git merge --no-edit -m "Merge upstream $TAG" "$TAG"; then
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+          else
+            git diff --name-only --diff-filter=U > conflicts.txt
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Conflict - open an issue
+        if: steps.merge.outputs.result == 'conflict'
+        run: |
+          T="Merge conflict with upstream ${{ steps.merge.outputs.tag }}"
+          if [ -z "$(gh issue list --state open --search "$T in:title" --json number -q '.[].number')" ]; then
+            printf 'Merging upstream %s into st-navbar conflicts in:\n\n%s\n\nResolve it on st-navbar (merge the tag by hand) and push: this workflow builds, tests and releases it.\n' \
+              "${{ steps.merge.outputs.tag }}" "$(sed 's/^/- /' conflicts.txt)" | gh issue create --title "$T" --body-file -
+          fi
+          exit 1
+      - uses: oven-sh/setup-bun@v2
+      - name: Build
+        run: |
+          bun install
+          bun run build
+      - name: Upstream's tests
+        run: bun run test
+      - name: The fork's tests
+        run: |
+          cd st-tests && npm install --no-save --no-audit --no-fund jsdom@26 && cd ..
+          node st-tests/st-tests.mjs dist/navbar-card.js
+      - name: Push the merge
+        if: steps.merge.outputs.result == 'merged'
+        run: git push origin st-navbar
+      - name: Release
+        run: |
+          UP="${{ steps.merge.outputs.tag }}"
+          SHA=$(git rev-parse HEAD)
+          LAST=$(gh release list --limit 1 --json tagName -q '.[0].tagName')
+          if [ -n "$LAST" ] && [ "$(git rev-list -n1 "$LAST" 2>/dev/null)" = "$SHA" ]; then echo "$LAST is this commit: nothing to release"; exit 0; fi
+          N=1
+          while gh release view "$UP-st.$N" >/dev/null 2>&1; do N=$((N+1)); done
+          NEW="$UP-st.$N"
+          sha256sum dist/navbar-card.js | cut -d' ' -f1 > dist/navbar-card.js.sha256
+          printf 'upstream: %s\nbranch st-navbar @ %s\n\n%s\n' "$UP" "${SHA:0:7}" "$(git log -1 --format=%s)" > notes.md
+          gh release create "$NEW" dist/navbar-card.js dist/navbar-card.js.sha256 --target "$SHA" --title "$NEW" --notes-file notes.md
+      - name: Failed - open an issue
+        if: failure() && steps.merge.outputs.result != 'conflict'
+        run: |
+          T="st-navbar build or tests failed (upstream ${{ steps.merge.outputs.tag }})"
+          if [ -z "$(gh issue list --state open --search "$T in:title" --json number -q '.[].number')" ]; then
+            gh issue create --title "$T" --body "See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Nothing was released; Home Assistant keeps the build it has."
+          fi
