@@ -1,5 +1,5 @@
 import type { HassEntity } from 'home-assistant-js-websocket';
-import { html } from 'lit';
+import { html, nothing } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { keyed } from 'lit/directives/keyed.js';
 
@@ -18,6 +18,7 @@ export class MediaPlayer {
   private _activeIndex = 0;
   private _trackPointerId: number | null = null;
   private _dragStartX = 0;
+  private _dragStartT = 0;
   private _dragOffset = 0;
   private _isDragging = false;
   /** Playback position per entity, recomputed only when HA reports a new one */
@@ -173,6 +174,26 @@ export class MediaPlayer {
     });
   };
 
+  /** ST fork: previous, shuffle (toggle) and repeat (off -> all -> one -> off). */
+  private _handleExtra = (
+    e: MouseEvent,
+    entity: string,
+    kind: 'prev' | 'shuffle' | 'repeat',
+  ) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const hass = this._navbarCard._hass;
+    const a = hass.states[entity]?.attributes ?? {};
+    if (kind === 'prev') {
+      hass.callService('media_player', 'media_previous_track', { entity_id: entity });
+    } else if (kind === 'shuffle') {
+      hass.callService('media_player', 'shuffle_set', { entity_id: entity, shuffle: !a.shuffle });
+    } else {
+      const next: Record<string, string> = { off: 'all', all: 'one', one: 'off' };
+      hass.callService('media_player', 'repeat_set', { entity_id: entity, repeat: next[a.repeat] ?? 'all' });
+    }
+  };
+
   private _handleSkipNext = (e: MouseEvent, entity: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -185,6 +206,7 @@ export class MediaPlayer {
     if (e.button !== 0) return;
     this._trackPointerId = e.pointerId;
     this._dragStartX = e.clientX;
+    this._dragStartT = performance.now();
     this._dragOffset = 0;
     this._isDragging = false;
   };
@@ -200,7 +222,10 @@ export class MediaPlayer {
     }
 
     e.preventDefault();
-    const count = this._navbarCard.config?.media_player?.players?.length ?? 0;
+    // ST fork: the players shown (a hidden one isn't a slide), not every one configured
+    const count = (e.currentTarget as HTMLElement).querySelectorAll(
+      '.media-player-track > .media-player',
+    ).length;
     const atEdge =
       (this._activeIndex === 0 && dx > 0) ||
       (this._activeIndex === count - 1 && dx < 0);
@@ -217,8 +242,15 @@ export class MediaPlayer {
     const el = e.currentTarget as HTMLElement;
     el.releasePointerCapture(e.pointerId);
 
-    const threshold = el.offsetWidth * 0.3;
-    const count = this._navbarCard.config?.media_player?.players?.length ?? 0;
+    // ST fork: a short drag (48 px) or a flick switches, not 30% of the width
+    const dt = Math.max(1, performance.now() - this._dragStartT);
+    const flick =
+      Math.abs(this._dragOffset) > 16 && Math.abs(this._dragOffset) / dt > 0.35;
+    const threshold = flick ? 16 : Math.min(48, el.offsetWidth * 0.3);
+    // ST fork: the players shown (a hidden one isn't a slide), not every one configured
+    const count = (e.currentTarget as HTMLElement).querySelectorAll(
+      '.media-player-track > .media-player',
+    ).length;
 
     if (this._dragOffset < -threshold && this._activeIndex < count - 1) {
       this._activeIndex++;
@@ -257,25 +289,32 @@ export class MediaPlayer {
 
     const deviceClass = this._navbarCard.isDesktop ? 'desktop' : 'mobile';
 
+    // ST fork: in a wrapper (it's placed and styled; the card inside clips to the pill)
     return html`
-      <ha-card
+      <div
         class="${classMap({
-          'media-player': true,
+          'media-player-wrapper': true,
           'position-absolute': !options.isInsideNavbar,
           [(
             this.desktop_position ??
             DEFAULT_NAVBAR_CONFIG.media_player.desktop_position
           ).toString()]: true,
           [deviceClass]: true,
-        })}"
-        ${eventDetection({
-          context: this._navbarCard,
-          doubleTap: player.double_tap_action,
-          hold: player.hold_action,
-          tap: player.tap_action ?? { action: 'more-info', entity },
-        })}>
-        ${this._renderCardContent(player, entity, state)}
-      </ha-card>
+        })}">
+        <ha-card
+          class="${classMap({
+            'media-player': true,
+            [deviceClass]: true,
+          })}"
+          ${eventDetection({
+            context: this._navbarCard,
+            doubleTap: player.double_tap_action,
+            hold: player.hold_action,
+            tap: player.tap_action ?? { action: 'more-info', entity },
+          })}>
+          ${this._renderCardContent(player, entity, state)}
+        </ha-card>
+      </div>
     `;
   }
 
@@ -287,15 +326,18 @@ export class MediaPlayer {
     options: { isInsideNavbar: boolean },
   ) {
     const deviceClass = this._navbarCard.isDesktop ? 'desktop' : 'mobile';
-    const pct = -(this._activeIndex * 100);
-    const gapPx = -(this._activeIndex * CAROUSEL_GAP) + this._dragOffset;
     const transition = this._isDragging ? 'none' : 'transform 0.3s ease-out';
-    const transform = `translateX(calc(${pct}% + ${gapPx}px))`;
+    // ST fork: placed by --st-slide-w (a navbar's styles can narrow the slides) and --st-peek (the last one's offset);
+    // unset, as upstream
+    const atEnd =
+      this._activeIndex === players.length - 1 && players.length > 1;
+    const transform = `translateX(calc(${-this._activeIndex} * (var(--st-slide-w, 100%) + ${CAROUSEL_GAP}px) + ${atEnd ? 'var(--st-peek, 0px)' : '0px'} + ${this._dragOffset}px))`;
 
     return html`
       <div
         class="${classMap({
           'media-player-carousel': true,
+          'at-end': this._activeIndex === players.length - 1 && players.length > 1,
           'position-absolute': !options.isInsideNavbar,
           [(
             this.desktop_position ??
@@ -315,6 +357,7 @@ export class MediaPlayer {
             ${players.map(p => this._renderSlide(p))}
           </div>
         </div>
+        ${players.length > 1 ? this._renderNext(players) : nothing}
         <div class="media-player-dots">
           ${players.map(
             (_, i) =>
@@ -327,6 +370,37 @@ export class MediaPlayer {
         </div>
       </div>
     `;
+  }
+
+  /**
+   * ST fork: the next player's artwork (or icon) as a round button beside the carousel; a tap moves on, wrapping round.
+   * The count of the others at 3+. Hidden unless a navbar's styles show it.
+   */
+  private _renderNext(players: MediaPlayerPlayerConfig[]) {
+    const next = players[(this._activeIndex + 1) % players.length];
+    const entity = this._resolveEntity(next);
+    const state = this._navbarCard._hass.states[entity ?? ''];
+    const image =
+      state?.attributes?.entity_picture_local ?? state?.attributes?.entity_picture;
+    const icon = this._resolveIcon(next);
+    return html`<button
+      class="media-player-next"
+      aria-label=${state?.attributes?.friendly_name ?? entity ?? ''}
+      @pointerdown=${(e: PointerEvent) => e.stopPropagation()}
+      @click=${(e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this._activeIndex = (this._activeIndex + 1) % players.length;
+        this._dragOffset = 0;
+        this._navbarCard.requestUpdate();
+      }}>
+      ${
+        image && !icon
+          ? html`<img class="media-player-next-image" src=${image} alt="" />`
+          : html`<ha-icon class="media-player-next-image media-player-icon-fallback" icon=${icon ?? 'mdi:music'}></ha-icon>`
+      }
+      ${players.length > 2 ? html`<span class="media-player-next-count">${players.length - 1}</span>` : nothing}
+    </button>`;
   }
 
   /**
@@ -473,6 +547,20 @@ export class MediaPlayer {
         <span class="media-player-artist">${subtitle || ''}</span>
       </div>
       <button
+        class="navbar-icon-button media-player-button media-player-button-extra media-player-button-shuffle ${state.attributes.shuffle ? 'on' : ''}"
+        @click=${(e: MouseEvent) => this._handleExtra(e, entity, 'shuffle')}
+        @pointerdown=${preventEventDefault}
+        @pointerup=${preventEventDefault}>
+        <ha-icon icon="ios:shuffle"></ha-icon>
+      </button>
+      <button
+        class="navbar-icon-button media-player-button media-player-button-extra media-player-button-prev"
+        @click=${(e: MouseEvent) => this._handleExtra(e, entity, 'prev')}
+        @pointerdown=${preventEventDefault}
+        @pointerup=${preventEventDefault}>
+        <ha-icon icon="ios:backward-fill"></ha-icon>
+      </button>
+      <button
         class="navbar-icon-button media-player-button media-player-button-play-pause primary"
         appearance="accent"
         variant="brand"
@@ -481,7 +569,7 @@ export class MediaPlayer {
         @pointerup=${preventEventDefault}>
         <ha-icon
           icon=${
-            state.state === 'playing' ? 'mdi:pause' : 'mdi:play'
+            state.state === 'playing' ? 'ios:pause-fill' : 'ios:play-fill'
           }></ha-icon>
       </button>
       <button
@@ -491,7 +579,14 @@ export class MediaPlayer {
         @click=${(e: MouseEvent) => this._handleSkipNext(e, entity)}
         @pointerdown=${preventEventDefault}
         @pointerup=${preventEventDefault}>
-        <ha-icon icon="mdi:skip-next"></ha-icon>
+        <ha-icon icon="ios:forward-fill"></ha-icon>
+      </button>
+      <button
+        class="navbar-icon-button media-player-button media-player-button-extra media-player-button-repeat ${state.attributes.repeat && state.attributes.repeat !== 'off' ? 'on' : ''}"
+        @click=${(e: MouseEvent) => this._handleExtra(e, entity, 'repeat')}
+        @pointerdown=${preventEventDefault}
+        @pointerup=${preventEventDefault}>
+        <ha-icon icon=${state.attributes.repeat === 'one' ? 'ios:repeat-1' : 'ios:repeat'}></ha-icon>
       </button>
     `;
   }

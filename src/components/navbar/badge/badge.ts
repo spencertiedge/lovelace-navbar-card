@@ -65,6 +65,27 @@ export class Badge {
     );
   }
 
+  /**
+   * ST fork: a colour string is a strip of coloured dots under the label, one per comma-separated colour
+   * (`var(--purple-color),var(--amber-color)`; commas inside `rgba(...)` etc. kept) - one colour, one dot. `null` for
+   * a JS template (`[[[`) or no colour.
+   */
+  get colors(): string[] | null {
+    const result = processTemplate<string>(
+      this._navbarCard._hass,
+      this._navbarCard,
+      this._route.data.badge?.color,
+    );
+    if (typeof result === 'string' && !result.startsWith('[[[')) {
+      const parts = result
+        .split(/,(?![^(]*\))/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      return parts.length ? parts : null;
+    }
+    return null;
+  }
+
   get textColor(): string | null {
     return (
       processTemplate<string>(
@@ -88,6 +109,15 @@ export class Badge {
   public render() {
     if (!this.show) return nothing;
 
+    const colors = this.colors;
+    if (colors) {
+      return html`
+        <div class="badge badge-multi ${this._route.selected ? 'active' : ''}">
+          ${colors.map((c) => html`<div class="badge-dot" style=${styleMap({ backgroundColor: c })}></div>`)}
+        </div>
+      `;
+    }
+
     const icon = this.icon;
     const count = this.count;
     const backgroundColor = this.backgroundColor;
@@ -96,9 +126,15 @@ export class Badge {
     const configuredForegroundColor = hasIcon
       ? (this.iconColor ?? this.textColor)
       : this.textColor;
-    const foregroundColor =
-      configuredForegroundColor ??
-      Color.from(backgroundColor).contrastingColor().hex();
+    // ST fork: a colour Color can't parse (a CSS variable) no longer throws, which took the whole navbar down
+    let foregroundColor = configuredForegroundColor;
+    if (foregroundColor == null) {
+      try {
+        foregroundColor = Color.from(backgroundColor).contrastingColor().hex();
+      } catch {
+        foregroundColor = 'white';
+      }
+    }
 
     return html`
       <div

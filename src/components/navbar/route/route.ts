@@ -1,4 +1,4 @@
-import { html, type TemplateResult } from 'lit';
+import { html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 import { styleMap } from 'lit/directives/style-map.js';
 
@@ -79,7 +79,7 @@ export class Route extends BaseRoute {
           })}>
           ${this.icon.render()}
           <ha-ripple></ha-ripple>
-          ${this.badge.render()}
+          ${this.badge.colors ? nothing : this.badge.render()}
         </div>
         ${
           this.label
@@ -92,6 +92,7 @@ export class Route extends BaseRoute {
             </div>`
             : html``
         }
+        ${/* ST fork: the colour strip after the label, outside the button */ this.badge.colors ? this.badge.render() : nothing}
       </div>
     `;
   }

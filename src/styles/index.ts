@@ -249,61 +249,74 @@ const MEDIA_PLAYER_STYLES = css`
     width: 100%;
   }
 
+  /* ST fork: the player in a wrapper - sizing, position, glass and shadow (no clip-path here, so filter:
+     drop-shadow can render); the ha-card inside clips to the pill */
+  .media-player-wrapper {
+    width: 90%;
+    border-radius: var(--navbar-border-radius);
+  }
+
+  .media-player-wrapper.mobile {
+    background: color-mix(in srgb, var(--ha-card-background) 65%, transparent);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(0,0,0,0.08);
+    filter: drop-shadow(0 4px 20px rgba(0,0,0,0.25));
+  }
+
+  .media-player-wrapper.desktop {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  :is(.media-player-wrapper, .media-player-carousel).mobile {
+    align-self: center;
+  }
+
   .media-player {
     cursor: pointer;
-    width: 90%;
+    width: 100%;
     overflow: hidden;
     position: relative;
-    box-shadow: var(--navbar-box-shadow-mobile-floating);
     border-radius: var(--navbar-border-radius);
     display: flex;
     flex-direction: row;
   }
 
-  :is(.media-player, .media-player-carousel).mobile {
-    border: none;
-    align-self: center;
-  }
-
-  .media-player.desktop {
-    width: 100%;
-    max-width: 400px;
-  }
-
   /* Center media player when inside navbar (wider than max-width) */
-  :is(.media-player, .media-player-carousel).desktop:not(.position-absolute) {
+  :is(.media-player-wrapper, .media-player-carousel).desktop:not(.position-absolute) {
     align-self: center;
   }
 
-  :is(.media-player, .media-player-carousel).desktop.position-absolute {
+  :is(.media-player-wrapper, .media-player-carousel).desktop.position-absolute {
     position: fixed;
     width: 400px;
     z-index: var(--navbar-media-player-z-index);
   }
 
-  :is(.media-player, .media-player-carousel).desktop.position-absolute.top-left {
+  :is(.media-player-wrapper, .media-player-carousel).desktop.position-absolute.top-left {
     left: var(--navbar-edge-inset);
     top: calc(var(--header-height) + var(--navbar-edge-inset));
   }
-  :is(.media-player, .media-player-carousel).desktop.position-absolute.top-center {
+  :is(.media-player-wrapper, .media-player-carousel).desktop.position-absolute.top-center {
     left: var(--navbar-view-center);
     top: calc(var(--header-height) + var(--navbar-edge-inset));
     transform: translateX(-50%);
   }
-  :is(.media-player, .media-player-carousel).desktop.position-absolute.top-right {
+  :is(.media-player-wrapper, .media-player-carousel).desktop.position-absolute.top-right {
     right: var(--navbar-edge-inset);
     top: calc(var(--header-height) + var(--navbar-edge-inset));
   }
-  :is(.media-player, .media-player-carousel).desktop.position-absolute.bottom-left {
+  :is(.media-player-wrapper, .media-player-carousel).desktop.position-absolute.bottom-left {
     left: calc(var(--navbar-left-margin, 0px) + var(--navbar-edge-inset));
     bottom: var(--navbar-edge-inset);
   }
-  :is(.media-player, .media-player-carousel).desktop.position-absolute.bottom-center {
+  :is(.media-player-wrapper, .media-player-carousel).desktop.position-absolute.bottom-center {
     left: var(--navbar-view-center);
     bottom: var(--navbar-edge-inset);
     transform: translateX(-50%);
   }
-  :is(.media-player, .media-player-carousel).desktop.position-absolute.bottom-right {
+  :is(.media-player-wrapper, .media-player-carousel).desktop.position-absolute.bottom-right {
     right: var(--navbar-edge-inset);
     bottom: var(--navbar-edge-inset);
   }
@@ -357,6 +370,14 @@ const MEDIA_PLAYER_STYLES = css`
   .media-player .media-player-button {
   }
 
+  /* ST fork: previous / shuffle / repeat - hidden unless a navbar's styles show them */
+  .media-player .media-player-button.media-player-button-extra {
+    display: none;
+  }
+  .media-player .media-player-button.media-player-button-extra.on {
+    --icon-primary-color: var(--primary-color);
+    color: var(--primary-color);
+  }
   .media-player .media-player-button.media-player-button-play-pause {
   }
 
@@ -420,6 +441,10 @@ const MEDIA_PLAYER_STYLES = css`
     border: none;
   }
 
+  /* ST fork: the next player's artwork beside the carousel - hidden unless a navbar's styles show it */
+  .media-player-next {
+    display: none;
+  }
   .media-player-dots {
     display: flex;
     justify-content: center;
@@ -456,8 +481,10 @@ const ROUTE_STYLES = css`
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    --icon-primary-color: var(--state-inactive-color);
-    overflow: hidden;
+    /* ST fork: unselected icons half the text colour; room under them for the colour strip */
+    --icon-primary-color: color-mix(in srgb, var(--primary-text-color) 50%, transparent);
+    overflow: visible;
+    padding-bottom: 12px;
   }
 
   /* Button styling */
@@ -471,6 +498,7 @@ const ROUTE_STYLES = css`
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    overflow: visible;
   }
   .button.active {
     background: color-mix(
@@ -518,6 +546,28 @@ const ROUTE_STYLES = css`
     border-radius: 999px;
     width: 12px;
     height: 12px;
+  }
+  /* ST fork: a badge of several colours - a strip of dots under the label */
+  .badge.badge-multi {
+    position: absolute;
+    bottom: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    top: auto;
+    width: auto;
+    height: auto;
+    background: none;
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    justify-content: center;
+  }
+  .badge-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
   }
   .badge.with-counter {
     display: flex;
