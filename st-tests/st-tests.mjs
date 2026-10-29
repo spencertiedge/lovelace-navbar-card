@@ -83,5 +83,50 @@ async function card(config, states, calls = []) {
   ok('no script errors (carousel)', !errors.length, errors);
 }
 
+// popup_style: native - the popup as the system's menu (a <select> over the button, showPicker), sections as headings
+{
+  const calls = [];
+  const cfg = { popup_style: 'native', routes: [
+    { url: '/lovelace/home', icon: 'mdi:home', label: 'Home', selected: true },
+    { icon: 'mdi:menu', label: 'Pages', tap_action: { action: 'open-popup' }, popup: [
+      { url: '/lovelace/home', icon: 'mdi:home', label: 'Home', selected: true },
+      { url: '/lovelace/b', icon: 'mdi:b', label: 'Basement' },
+      { url: '/lovelace/lights', icon: 'mdi:l', label: 'Lights', section: 'Pages' },
+      { icon: 'mdi:s', label: 'Search', section: 'Other', tap_action: { action: 'perform-action', perform_action: 'script.x' } },
+    ] },
+  ] };
+  const { w, el, r, errors } = await card(cfg, {}, calls);
+  let picked = 0;
+  w.HTMLSelectElement.prototype.showPicker = function () { picked++; };
+  const route = [...r.querySelectorAll('.route')][1];
+  route.querySelector('.button').dispatchEvent(new w.MouseEvent('click', { bubbles: true, composed: true }));
+  await el.updateComplete; await new Promise(res => setTimeout(res, 30));
+  const sel = r.querySelector('select.st-native-popup');
+  ok('native: a tap opens the system menu (a <select> shown with showPicker), not the card\'s popup', picked === 1 && !!sel && !r.querySelector('.navbar-popup'), [picked, !!sel]);
+  const groups = sel ? [...sel.querySelectorAll('optgroup')].map(g => `${g.label}:${g.querySelectorAll('option').length}`) : [];
+  ok('…its items, the sectioned ones under headings', sel && sel.options.length === 4 && groups.join() === 'Pages:1,Other:1', [sel?.options.length, groups]);
+  ok('…the current one chosen (the system\'s checkmark)', sel?.options[sel.selectedIndex]?.textContent === 'Home');
+  const actions = []; w.addEventListener('hass-action', e => actions.push(e.detail));
+  sel.value = '1'; sel.dispatchEvent(new w.Event('change'));
+  ok('…choosing a page goes there', w.location.pathname === '/lovelace/b', w.location.pathname);
+  sel.value = '3'; sel.dispatchEvent(new w.Event('change'));
+  await new Promise(res => setTimeout(res, 30));
+  ok('…choosing an action runs it (Home Assistant\'s action)', actions.some(a => a?.config?.tap_action?.perform_action === 'script.x' || JSON.stringify(a).includes('script.x')), actions);
+  // a hold's popup: iOS opens a menu only straight after a tap or a lift - opened as the finger lifts
+  w.HTMLSelectElement.prototype.showPicker = function () { if (!w.__lifted) throw new w.DOMException('no activation', 'NotAllowedError'); picked++; };
+  picked = 0; w.__lifted = false;
+  route.querySelector('.button').dispatchEvent(new w.MouseEvent('click', { bubbles: true, composed: true }));
+  await new Promise(res => setTimeout(res, 20));
+  ok('…not allowed yet (a hold, the finger still down): waits', picked === 0);
+  w.__lifted = true; w.dispatchEvent(new w.Event('pointerup'));
+  ok('…opened as the finger lifts', picked === 1);
+  // no showPicker at all: the card's own popup
+  delete w.HTMLSelectElement.prototype.showPicker;
+  route.querySelector('.button').dispatchEvent(new w.MouseEvent('click', { bubbles: true, composed: true }));
+  await el.updateComplete; await new Promise(res => setTimeout(res, 30));
+  ok('…where the system can\'t: the card\'s own popup', r.querySelectorAll('.navbar-popup .popup-item').length === 4);
+  ok('no script errors (native popup)', !errors.length, errors);
+}
+
 console.log(`\n${fails} failure(s)`);
 process.exit(fails ? 1 : 0);

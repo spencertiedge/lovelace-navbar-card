@@ -10,6 +10,9 @@ Branch **`st-navbar`** = upstream's latest release + ST's changes (they were a p
 5. player previous / shuffle / repeat buttons (hidden unless a navbar's styles show them); Cupertino (`ios:`) icons
 6. carousel: a 48 px drag or a flick switches; counts only the players shown; `--st-slide-w` / `--st-peek`; `.at-end`
 7. the next player's artwork as a round button beside the carousel (`.media-player-next`)
+8. `popup_style: native`: a route's popup as the system's menu (a `<select>` over the button, `showPicker()`; on iOS its
+   pop-up menu), popup items' `section` as headings, the current one checked; a hold's opens as the finger lifts;
+   the card's own popup where the system's can't open
 
 **Updates:** `.github/workflows/st-sync.yml` merges each new upstream release daily, builds, runs upstream's tests and
 `st-tests/`, and publishes `vX.Y.Z-st.N`. Home Assistant's `update.navbar_card_st_fork` (custom integration

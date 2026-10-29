@@ -2,6 +2,8 @@ import { type CSSResult, css, html } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 
 import { PopupItem } from '@/components/navbar';
+import { executeAction } from '@/lib/action-handler';
+import { processTemplate } from '@/utils';
 import type { NavbarCard } from '@/navbar-card';
 import { DesktopPosition, type PopupItem as PopupItemDef } from '@/types';
 
@@ -32,6 +34,12 @@ export class Popup {
   }
 
   public open(target: HTMLElement): void {
+    if (this._navbarCard.config?.popup_style === 'native' && this._openNative(target)) return;
+    this._openOwn(target);
+  }
+
+  /** The card's own popup (upstream's) */
+  private _openOwn(target: HTMLElement): void {
     const anchorRect = target.getBoundingClientRect();
 
     const { style, labelPositionClassName, popupDirectionClassName } =
@@ -96,6 +104,90 @@ export class Popup {
         this.backdrop.addEventListener('click', this._backdropClickListener);
       }
     }, 400);
+  }
+
+  /**
+   * ST fork: the popup as the system's menu - a <select> laid over the button it opens from (where iOS anchors its
+   * pop-up menu), shown with showPicker(). Its items' sections become headings (optgroups); the current one is the
+   * selected option (iOS's checkmark). Choosing one runs that item's tap action, as a tap on it would. iOS opens it
+   * only straight after a tap or a finger lifting: a hold's popup (opened while the finger's still down) waits for
+   * the lift. False where it can't be done here (no showPicker): the card's own popup instead.
+   */
+  private _openNative(target: HTMLElement): boolean {
+    const root = this._navbarCard.shadowRoot;
+    const items = this.items.filter(item => !item.hidden);
+    if (!root || !items.length) return false;
+    let select = root.querySelector<HTMLSelectElement>('select.st-native-popup');
+    if (!select) {
+      select = document.createElement('select');
+      select.className = 'st-native-popup';
+      select.setAttribute('aria-hidden', 'true');
+      select.tabIndex = -1;
+      root.append(select);
+    }
+    if (typeof select.showPicker !== 'function') return false;
+    const r = target.getBoundingClientRect();
+    Object.assign(select.style, {
+      position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`,
+      opacity: '0', pointerEvents: 'none', zIndex: '-1', border: '0', margin: '0', padding: '0', fontSize: '16px',
+    });
+    // its options: a placeholder chosen when nothing is current (so any choice is a change), then each item under
+    // its section's heading
+    select.replaceChildren();
+    const current = items.findIndex(item => item.selected);
+    if (current < 0) {
+      const none = document.createElement('option');
+      none.value = '';
+      none.disabled = true;
+      none.hidden = true;
+      none.selected = true;
+      none.textContent = '';
+      select.append(none);
+    }
+    let group: HTMLElement = select, section: string | undefined;
+    items.forEach((item, i) => {
+      const s = item.data.section;
+      if (s !== section) {
+        section = s;
+        if (s) {
+          group = document.createElement('optgroup');
+          (group as HTMLOptGroupElement).label = s;
+          select.append(group);
+        } else group = select;
+      }
+      const option = document.createElement('option');
+      option.value = String(i);
+      // (its label whatever the navbar's show_labels: a menu of names)
+      option.textContent =
+        processTemplate<string>(this._navbarCard._hass, this._navbarCard, item.data.label) || item.url || '';
+      option.selected = i === current;
+      group.append(option);
+    });
+    select.onchange = () => {
+      const item = items[Number(select.value)];
+      if (!item) return;
+      executeAction({
+        action: item.tap_action,  // (none: a page, gone to by its url, as a tap on it would)
+        actionType: 'tap',
+        context: this._navbarCard,
+        data: { popupItem: item },
+        target,
+      });
+    };
+    try {
+      select.showPicker();
+    } catch {
+      // (no user activation: a hold, its finger still down - opened as it lifts)
+      const lifted = () => {
+        try {
+          select.showPicker();
+        } catch {
+          this._openOwn(target);  // (the system wouldn't: the card's own)
+        }
+      };
+      window.addEventListener('pointerup', lifted, { capture: true, once: true });
+    }
+    return true;
   }
 
   public close(): void {

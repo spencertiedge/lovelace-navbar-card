@@ -94,6 +94,8 @@ export type RouteItemBase = {
   hidden?: JSTemplatable<boolean>;
   selected?: JSTemplatable<boolean>;
   selected_color?: JSTemplatable<string>;
+  /** ST fork: the heading a popup item goes under in a native popup (popup_style: native) */
+  section?: string;
 };
 
 // Type for popup menu items (don't include popup property to avoid circular references)
@@ -174,6 +176,11 @@ export type NavbarCardConfig = {
   };
   styles?: string;
   haptic?: boolean | HapticConfig;
+  /**
+   * ST fork: how a route's popup opens. `native`: the system's own menu (a <select>'s: on iOS its pop-up menu, with
+   * section headers and a checkmark on the current item), where it can be opened; else, and by default, the card's own.
+   */
+  popup_style?: 'default' | 'native';
 };
 
 export const DEFAULT_NAVBAR_CONFIG = {
