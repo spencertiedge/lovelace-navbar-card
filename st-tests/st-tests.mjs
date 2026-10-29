@@ -10,6 +10,7 @@ const ok = (name, c, extra = '') => { if (!c) fails++; console.log(c ? 'PASS' : 
 async function card(config, states, calls = []) {
   const dom = new JSDOM('<!doctype html><body></body>', { url: 'http://ha.local/lovelace/home', runScripts: 'outside-only', pretendToBeVisual: true });
   const w = dom.window, errors = [];
+  if (!w.PointerEvent) w.PointerEvent = w.MouseEvent; // older jsdom (CI) has no PointerEvent
   w.addEventListener('error', e => errors.push(e.message));
   w.matchMedia = q => ({ media: q, matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
   w.Element.prototype.setPointerCapture = () => {}; w.Element.prototype.releasePointerCapture = () => {};
