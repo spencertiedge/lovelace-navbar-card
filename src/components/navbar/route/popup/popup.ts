@@ -149,23 +149,15 @@ export class Popup {
   }
 
   /**
-   * ST fork: a <select>'s options made this popup's items: a placeholder chosen when nothing is current (so any
-   * choice is a change), then each item under its section's heading (an optgroup), the current one selected (iOS's
-   * checkmark). Choosing one runs that item's tap action, as a tap on it would.
+   * ST fork: a <select>'s options made this popup's items: each item under its section's heading (an optgroup),
+   * the current one selected (iOS's checkmark) - when none is, none selected (selectedIndex -1, so any choice is a
+   * change; not a hidden placeholder, which iOS's menu shows anyway: a blank first row with the checkmark, ST
+   * 2026-10-29). Choosing one runs that item's tap action, as a tap on it would.
    */
   public fillNative(select: HTMLSelectElement, target: HTMLElement): void {
     const items = this.items.filter(item => !item.hidden);
     select.replaceChildren();
     const current = items.findIndex(item => item.selected);
-    if (current < 0) {
-      const none = document.createElement('option');
-      none.value = '';
-      none.disabled = true;
-      none.hidden = true;
-      none.selected = true;
-      none.textContent = '';
-      select.append(none);
-    }
     let group: HTMLElement = select, section: string | undefined;
     items.forEach((item, i) => {
       const s = item.data.section;
@@ -185,6 +177,7 @@ export class Popup {
       option.selected = i === current;
       group.append(option);
     });
+    select.selectedIndex = current;  // (after the options: adding them chose the first)
     select.onchange = () => {
       const item = items[Number(select.value)];
       if (!item) return;

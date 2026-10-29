@@ -119,6 +119,19 @@ async function card(config, states, calls = []) {
   sel.value = '3'; sel.dispatchEvent(new w.Event('change'));
   await new Promise(res => setTimeout(res, 30));
   ok('…choosing an action runs it (Home Assistant\'s action)', actions.some(a => JSON.stringify(a).includes('script.x')), actions);
+  // none current: no blank first row (iOS's menu shows a hidden placeholder anyway, checkmarked), none chosen
+  {
+    const c = await card({ popup_style: 'native', routes: [
+      { url: '/lovelace/home', icon: 'mdi:home', label: 'Home' },
+      { icon: 'mdi:menu', label: 'Pages', tap_action: { action: 'open-popup' }, popup: [
+        { url: '/lovelace/x', icon: 'mdi:x', label: 'X', selected: false },
+        { url: '/lovelace/y', icon: 'mdi:y', label: 'Y', selected: false } ] } ] }, {}, []);
+    const s2 = c.r.querySelector('select.st-native-select');
+    s2.dispatchEvent(new c.w.PointerEvent('pointerdown', { bubbles: true, composed: true }));
+    ok('…none current: just its items, none chosen (no blank checkmarked row)', s2.options.length === 2 && s2.selectedIndex === -1 && s2.options[0].textContent === 'X', [s2.options.length, s2.selectedIndex]);
+    s2.value = '0'; s2.dispatchEvent(new c.w.Event('change'));
+    ok('…and the first one still goes there', c.w.location.pathname === '/lovelace/x', c.w.location.pathname);
+  }
   // a hold's popup: showPicker - iOS opens a menu only straight after a tap or a lift: opened as the finger lifts
   const hold = async () => {
     routes[2].dispatchEvent(new w.PointerEvent('pointerdown', { bubbles: true, composed: true }));
