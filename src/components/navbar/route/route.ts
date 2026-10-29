@@ -55,7 +55,9 @@ export class Route extends BaseRoute {
         class=${classMap({
           active: isActive,
           route: true,
+          'st-menu-route': this._opensMenu(),
         })}
+        @pointerdown=${this._menuPress}
         style=${styleMap({
           '--navbar-primary-color': this.selected_color ?? null,
         })}
@@ -126,6 +128,21 @@ export class Route extends BaseRoute {
       @pointerup=${stop}
       @click=${stop}></select>`;
   }
+
+  /** ST fork: popup_style menu, this route's tap or hold opening its popup (the finger then dragged along it) */
+  private _opensMenu(): boolean {
+    return (
+      this._navbarCard.config?.popup_style === 'menu' &&
+      [this.tap_action, this.hold_action].some(a => a?.action === 'open-popup')
+    );
+  }
+
+  /** ST fork: a tap's menu opens as the finger goes down (as iOS's pull-down menus do), not on the click after */
+  private _menuPress = (ev: PointerEvent): void => {
+    if (ev.button > 0 || !this._opensMenu() || this.tap_action?.action !== 'open-popup') return;
+    if (this.hold_action || this.double_tap_action) return;
+    this.popup.menu.open(ev.currentTarget as HTMLElement, true);
+  };
 
   private _validateRoute(): void {
     if (!(this.data.icon || this.data.image)) {

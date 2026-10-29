@@ -2,6 +2,7 @@ import { type CSSResult, css, html } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 
 import { PopupItem } from '@/components/navbar';
+import { StMenu } from '@/components/navbar/route/popup/st-menu';
 import { executeAction } from '@/lib/action-handler';
 import { processTemplate } from '@/utils';
 import type { NavbarCard } from '@/navbar-card';
@@ -10,6 +11,7 @@ import { DesktopPosition, type PopupItem as PopupItemDef } from '@/types';
 export class Popup {
   private _popupItems: PopupItem[] = [];
   private _backdropClickListener?: (e: Event) => void;
+  private _menu?: StMenu;
 
   constructor(
     private _navbarCard: NavbarCard,
@@ -33,7 +35,13 @@ export class Popup {
     );
   }
 
+  /** ST fork: the popup as iOS's menu (popup_style: menu) */
+  get menu(): StMenu {
+    return (this._menu ??= new StMenu(this._navbarCard, this));
+  }
+
   public open(target: HTMLElement): void {
+    if (this._navbarCard.config?.popup_style === 'menu') return this.menu.open(target);
     if (this._navbarCard.config?.popup_style === 'native' && this._openNative(target)) return;
     this._openOwn(target);
   }
@@ -192,6 +200,7 @@ export class Popup {
   }
 
   public close(): void {
+    if (this._menu?.isOpen) return this._menu.close();
     const popup = this._navbarCard.shadowRoot?.querySelector('.navbar-popup');
 
     // Remove backdrop listener

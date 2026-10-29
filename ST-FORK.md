@@ -14,6 +14,11 @@ Branch **`st-navbar`** = upstream's latest release + ST's changes (they were a p
    headings, the current one checked. A tap's popup: an invisible `<select>` over the route, the tap itself opening
    it (iOS's web view won't open one from script). A hold's: a `<select>` over the button shown with `showPicker()`,
    as the finger lifts; the card's own popup where the system's can't open
+9. `popup_style: menu`: a route's popup drawn as iOS's menu (`st-menu.ts`) - frosted, grown from its button, the
+   current item checked, popup items' `section` as headings and their new `detail` as a second line, icons on the
+   right. Opens on the press (a tap's on pointerdown, a hold's as it fires); drag along it to light a row (a
+   `haptic` `selection` tick per row, played by Home Assistant's app) and lift to choose; lifted on the button it
+   stays open to tap; a tap outside closes it
 
 **Updates:** `.github/workflows/st-sync.yml` merges each new upstream release daily, builds, runs upstream's tests and
 `st-tests/`, and publishes `vX.Y.Z-st.N`. Home Assistant's `update.navbar_card_st_fork` (custom integration

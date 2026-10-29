@@ -1,6 +1,7 @@
 import { type CSSResult, css } from 'lit';
 
 import { DRAGGABLE_ITEM_STYLES, EDITOR_STYLES } from '@/styles/editor';
+import { ST_MENU_STYLES } from '@/components/navbar/route/popup/st-menu';
 
 const HOST_STYLES = css`
   :host {
@@ -828,6 +829,7 @@ export const getDefaultStyles = (): CSSResult => {
     ${MEDIA_PLAYER_STYLES}
     ${ROUTE_STYLES}
     ${POPUP_STYLES}
+    ${ST_MENU_STYLES}
     ${COMPONENTS_STYLES}
   `;
 };

@@ -152,5 +152,69 @@ async function card(config, states, calls = []) {
   ok('no script errors (native popup)', !errors.length, errors);
 }
 
+// popup_style: menu - the card's own popup as iOS's menu: opens on the press, drag along it (a haptic tick per row),
+// lift to choose; rows with a detail line and their icon, the current one checked
+{
+  const items = [
+    { url: '/lovelace/home', icon: 'mdi:home', label: 'Home', detail: '[[[ return states["sensor.n"].state + " on" ]]]' },
+    { url: '/lovelace/b', icon: 'mdi:b', label: 'Basement', section: 'Floors' },
+    { icon: 'mdi:s', label: 'Search', section: 'Other', tap_action: { action: 'perform-action', perform_action: 'script.x' } },
+  ];
+  const { w, el, r, errors } = await card({ popup_style: 'menu', routes: [
+    { url: '/lovelace/home', icon: 'mdi:home', label: 'Home', selected: true },
+    { icon: 'mdi:menu', label: 'Pages', tap_action: { action: 'open-popup' }, popup: items },
+    { url: '/lovelace/c', icon: 'mdi:c', label: 'Floor', hold_action: { action: 'open-popup' }, popup: items },
+  ] }, { 'sensor.n': { state: '3', attributes: {} } });
+  const ticks = []; w.addEventListener('haptic', e => ticks.push(e.detail));
+  const actions = []; w.addEventListener('hass-action', e => actions.push(e.detail));
+  // (jsdom lays nothing out: the button at the bottom, rows 50px apart above it)
+  const gbr = w.HTMLElement.prototype.getBoundingClientRect;
+  w.HTMLElement.prototype.getBoundingClientRect = function () {
+    const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top });
+    if (this.classList.contains('st-menu-row')) return box(20, 400 + 50 * Number(this.dataset.i), 260, 50);
+    if (this.classList.contains('st-menu')) return box(12, 390, 280, 170);
+    if (this.classList.contains('route')) return box(100, 700, 60, 60);
+    if (this.classList.contains('navbar')) return box(0, 690, 400, 80);
+    return gbr.call(this);
+  };
+  const routes = [...r.querySelectorAll('.route')];
+  const ev = (t, x, y, target = w) => target.dispatchEvent(new w.PointerEvent(t, { bubbles: true, composed: true, clientX: x, clientY: y }));
+  const settle = async (ms = 30) => { await el.updateComplete; await new Promise(res => setTimeout(res, ms)); };
+  ok('menu: routes that open one take the touch (no page scroll, no callout)', routes[1].classList.contains('st-menu-route') && routes[2].classList.contains('st-menu-route') && !routes[0].classList.contains('st-menu-route'));
+  ev('pointerdown', 130, 730, routes[1]); await settle();
+  const rows = () => [...r.querySelectorAll('.st-menu .st-menu-row')];
+  ok('menu: opens as the finger goes down (a tap\'s)', rows().length === 3 && !r.querySelector('select'), rows().length);
+  ok('…each row: label, detail (templated), icon', rows()[0].querySelector('.st-menu-label')?.textContent === 'Home' && rows()[0].querySelector('.st-menu-detail')?.textContent === '3 on' && rows()[0].querySelector('ha-icon')?.getAttribute('icon') === 'mdi:home' && !rows()[1].querySelector('.st-menu-detail'));
+  ok('…sections under headings, a line between', [...r.querySelectorAll('.st-menu-section')].map(x => x.textContent).join() === 'Floors,Other' && r.querySelectorAll('.st-menu-gap').length === 2);
+  ok('…the current one checked, the others not', !!rows()[0].querySelector('.st-menu-check svg') && !rows()[1].querySelector('.st-menu-check svg'));
+  ok('…grown from its button (placed above it, origin at the button)', /px/.test(r.querySelector('.st-menu').style.transformOrigin) && r.querySelector('.st-menu').classList.contains('visible'));
+  ev('pointermove', 130, 425); ev('pointermove', 130, 430); ev('pointermove', 130, 475);
+  ok('menu: dragged along it, the row under the finger lit, a tick per new row', rows()[1].classList.contains('active') && ticks.join() === 'selection,selection', ticks);
+  ev('pointerup', 130, 475); routes[1].dispatchEvent(new w.MouseEvent('click', { bubbles: true, composed: true }));
+  await settle(300);
+  ok('…lifted on a row: chosen (goes there), closed', w.location.pathname === '/lovelace/b' && !r.querySelector('.st-menu'), w.location.pathname);
+  // a tap: lifted on the button - left open to tap; the click after it doesn't open it again (or close it)
+  ev('pointerdown', 130, 730, routes[1]); await settle();
+  ev('pointerup', 130, 730); routes[1].dispatchEvent(new w.MouseEvent('click', { bubbles: true, composed: true })); await settle();
+  ok('menu: a tap leaves it open', !!r.querySelector('.st-menu.visible'));
+  ev('pointerdown', 130, 525, r.querySelector('.st-menu')); await settle();
+  ok('…a finger put on a row lights it (no tick there)', rows()[2].classList.contains('active') && ticks.length === 2, ticks);
+  ev('pointerup', 130, 525); await settle(300);
+  ok('…lifted there: its action runs', actions.some(a => JSON.stringify(a).includes('script.x')) && !r.querySelector('.st-menu'), actions);
+  ev('pointerdown', 130, 730, routes[1]); ev('pointerup', 130, 730); await settle();
+  ev('pointerdown', 380, 100, r.querySelector('.st-menu-backdrop')); ev('pointerup', 380, 100); await settle(400);
+  ok('menu: a tap outside closes it', !r.querySelector('.st-menu') && !r.querySelector('.st-menu-backdrop'));
+  // a hold's: opens as the hold fires, the finger still down, then follows it the same
+  ev('pointerdown', 130, 730, routes[2]); await settle(700);
+  ok('menu: a hold\'s opens with the finger still down (the hold\'s own haptic as it does)', rows().length === 3 && ticks.length === 3, ticks);
+  ev('pointermove', 130, 425);
+  ok('…followed: the row under it lit, ticked', rows()[0].classList.contains('active') && ticks.length === 4, ticks);
+  const before = w.location.pathname;
+  ev('pointerup', 380, 100); await settle(300);
+  ok('…lifted off it, away from the button: closed, nothing chosen', !r.querySelector('.st-menu') && w.location.pathname === before);
+  w.HTMLElement.prototype.getBoundingClientRect = gbr;
+  ok('no script errors (menu)', !errors.length, errors);
+}
+
 console.log(`\n${fails} failure(s)`);
 process.exit(fails ? 1 : 0);
