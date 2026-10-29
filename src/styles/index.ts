@@ -598,6 +598,22 @@ const ROUTE_STYLES = css`
   .desktop .route .label {
     flex: unset;
   }
+  /* ST fork: the route's own system menu (popup_style native) - over it, unseen */
+  .route > select.st-native-select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    font-size: 16px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    z-index: 2;
+  }
   .desktop .route {
     height: 60px;
     width: 70px;

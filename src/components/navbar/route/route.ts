@@ -93,8 +93,38 @@ export class Route extends BaseRoute {
             : html``
         }
         ${/* ST fork: the colour strip after the label, outside the button */ this.badge.colors ? this.badge.render() : nothing}
+        ${this._nativeSelect()}
       </div>
     `;
+  }
+
+  /**
+   * ST fork: a route whose tap opens its popup, with popup_style native: an invisible <select> over it, so the tap
+   * itself opens the system's menu (iOS's web view won't open one from script - no showPicker for a <select>; ST,
+   * 2026-10-29: the card's own popup still). Its options are the popup's, made as the finger goes down. Not with a
+   * hold or double tap of its own (the <select> takes the touch).
+   */
+  private _nativeSelect(): TemplateResult | typeof nothing {
+    if (
+      this._navbarCard.config?.popup_style !== 'native' ||
+      this.tap_action?.action !== 'open-popup' ||
+      this.hold_action ||
+      this.double_tap_action
+    )
+      return nothing;
+    const fill = (ev: Event) => {
+      ev.stopPropagation();  // (not the route's own tap: the card's popup too)
+      const select = ev.currentTarget as HTMLSelectElement;
+      this.popup.fillNative(select, select.parentElement ?? select);
+    };
+    const stop = (ev: Event) => ev.stopPropagation();
+    return html`<select
+      class="st-native-select"
+      aria-label=${this.label || 'Menu'}
+      @pointerdown=${fill}
+      @focus=${fill}
+      @pointerup=${stop}
+      @click=${stop}></select>`;
   }
 
   private _validateRoute(): void {

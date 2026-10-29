@@ -108,15 +108,15 @@ export class Popup {
 
   /**
    * ST fork: the popup as the system's menu - a <select> laid over the button it opens from (where iOS anchors its
-   * pop-up menu), shown with showPicker(). Its items' sections become headings (optgroups); the current one is the
-   * selected option (iOS's checkmark). Choosing one runs that item's tap action, as a tap on it would. iOS opens it
-   * only straight after a tap or a finger lifting: a hold's popup (opened while the finger's still down) waits for
-   * the lift. False where it can't be done here (no showPicker): the card's own popup instead.
+   * pop-up menu), shown with showPicker(). For a hold's popup: a tap's is the route's own <select> (Route.render),
+   * the finger's tap itself opening it - iOS's web view has no showPicker for a <select>, or won't use it (ST,
+   * 2026-10-29: the card's own popup still). iOS opens it only straight after a tap or a finger lifting: a hold's
+   * popup (opened while the finger's still down) waits for the lift. False where it can't be done here (no
+   * showPicker): the card's own popup instead.
    */
   private _openNative(target: HTMLElement): boolean {
     const root = this._navbarCard.shadowRoot;
-    const items = this.items.filter(item => !item.hidden);
-    if (!root || !items.length) return false;
+    if (!root || !this.items.some(item => !item.hidden)) return false;
     let select = root.querySelector<HTMLSelectElement>('select.st-native-popup');
     if (!select) {
       select = document.createElement('select');
@@ -131,8 +131,30 @@ export class Popup {
       position: 'fixed', left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`,
       opacity: '0', pointerEvents: 'none', zIndex: '-1', border: '0', margin: '0', padding: '0', fontSize: '16px',
     });
-    // its options: a placeholder chosen when nothing is current (so any choice is a change), then each item under
-    // its section's heading
+    this.fillNative(select, target);
+    try {
+      select.showPicker();
+    } catch {
+      // (no user activation: a hold, its finger still down - opened as it lifts)
+      const lifted = () => {
+        try {
+          select.showPicker();
+        } catch {
+          this._openOwn(target);  // (the system wouldn't: the card's own)
+        }
+      };
+      window.addEventListener('pointerup', lifted, { capture: true, once: true });
+    }
+    return true;
+  }
+
+  /**
+   * ST fork: a <select>'s options made this popup's items: a placeholder chosen when nothing is current (so any
+   * choice is a change), then each item under its section's heading (an optgroup), the current one selected (iOS's
+   * checkmark). Choosing one runs that item's tap action, as a tap on it would.
+   */
+  public fillNative(select: HTMLSelectElement, target: HTMLElement): void {
+    const items = this.items.filter(item => !item.hidden);
     select.replaceChildren();
     const current = items.findIndex(item => item.selected);
     if (current < 0) {
@@ -174,20 +196,6 @@ export class Popup {
         target,
       });
     };
-    try {
-      select.showPicker();
-    } catch {
-      // (no user activation: a hold, its finger still down - opened as it lifts)
-      const lifted = () => {
-        try {
-          select.showPicker();
-        } catch {
-          this._openOwn(target);  // (the system wouldn't: the card's own)
-        }
-      };
-      window.addEventListener('pointerup', lifted, { capture: true, once: true });
-    }
-    return true;
   }
 
   public close(): void {
