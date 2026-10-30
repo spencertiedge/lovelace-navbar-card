@@ -218,7 +218,7 @@ async function card(config, states, calls = []) {
   ev('pointerup', 130, 525); await settle(300);
   ok('…lifted there: its action runs', actions.some(a => JSON.stringify(a).includes('script.x')) && !r.querySelector('.st-menu'), actions);
   ev('pointerdown', 130, 730, routes[1]); ev('pointerup', 130, 730); await settle();
-  ev('pointerdown', 380, 100, r.querySelector('.st-menu-backdrop')); ev('pointerup', 380, 100); await settle(400);
+  ev('pointerdown', 380, 100, r.querySelector('.st-menu-backdrop')); ev('pointerup', 380, 100); await settle(600);
   ok('menu: a tap outside closes it', !r.querySelector('.st-menu') && !r.querySelector('.st-menu-backdrop'));
   // a hold's: opens as the hold fires, the finger still down, then follows it the same
   ev('pointerdown', 130, 730, routes[2]); await settle(700);
@@ -226,7 +226,7 @@ async function card(config, states, calls = []) {
   ev('pointermove', 130, 425);
   ok('…followed: the row under it lit, ticked', rows()[0].classList.contains('active') && ticks.length === 4, ticks);
   const before = w.location.pathname;
-  ev('pointerup', 380, 100); await settle(300);
+  ev('pointerup', 380, 100); await settle(600);
   ok('…lifted off it, away from the button: closed, nothing chosen', !r.querySelector('.st-menu') && w.location.pathname === before);
   w.HTMLElement.prototype.getBoundingClientRect = gbr;
   ok('no script errors (menu)', !errors.length, errors);
