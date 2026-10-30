@@ -52,7 +52,7 @@ const spring = (response: number, damping: number): { easing: string; duration: 
 };
 const OPEN = spring(0.36, 1);  // (the glass's outline: no bounce - a clip past its box shows nothing)
 const STRETCH = spring(0.43, 0.6);  // (the stretch: past its size toward where it grows, then back - iOS 26's liquid)
-const CLOSE = spring(0.26, 1);
+const CLOSE = OPEN;  // (as long as it took to open: ST, 2026-10-30)
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const canAnimate = (el: Element | null): el is HTMLElement => !!el && typeof (el as HTMLElement).animate === 'function';
 
@@ -276,7 +276,7 @@ export class StMenu {
         // (and once it's ended, nothing of it left on the rows: WebKit can keep a filter's last frame drawn)
         rows.finished?.then(() => rows.cancel(), () => {});
       }
-      else body.animate([sharp, smeared], { duration: Math.round(duration * 0.5), easing: 'ease-in', fill: 'both' });
+      else body.animate([sharp, smeared], { duration: Math.round(duration * 0.6), easing: 'ease-in', fill: 'both' });
     }
     return opening ? 0 : duration;
   }
