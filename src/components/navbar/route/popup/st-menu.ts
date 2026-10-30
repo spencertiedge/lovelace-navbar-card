@@ -50,7 +50,8 @@ const spring = (response: number, damping: number): { easing: string; duration: 
   const n = 48, points = Array.from({ length: n + 1 }, (_, i) => (i === n ? 1 : x((duration * i) / n)).toFixed(4));
   return { easing: `linear(${points.join(', ')})`, duration: Math.round(duration * 1000) };
 };
-const OPEN = spring(0.42, 0.78);  // (a little bounce, as the system's menus)
+const OPEN = spring(0.42, 1);  // (the glass's outline: no bounce - a clip past its box shows nothing)
+const STRETCH = spring(0.5, 0.6);  // (the stretch: past its size toward where it grows, then back - iOS 26's liquid)
 const CLOSE = spring(0.3, 1);
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const canAnimate = (el: Element | null): el is HTMLElement => !!el && typeof (el as HTMLElement).animate === 'function';
@@ -217,6 +218,7 @@ export class StMenu {
     this._from = `inset(${y}px ${w - x - cw}px ${h - y - ch}px ${x}px round ${Math.min(cw, ch) / 2}px)`;
     this._radius = parseFloat(getComputedStyle(menu).borderTopLeftRadius) || 26;
     const body = menu.querySelector<HTMLElement>('.st-menu-body');
+    menu.style.transformOrigin = `${x + cw / 2}px ${y + ch / 2}px`;
     if (body) body.style.transformOrigin = `${x + cw / 2}px ${y + ch / 2}px`;
     // (a menu that scrolls lets the finger scroll it; one that doesn't keeps the drag)
     if (menu.scrollHeight > menu.clientHeight + 1) menu.style.touchAction = 'pan-y';
@@ -250,6 +252,10 @@ export class StMenu {
     const { easing, duration } = opening ? OPEN : CLOSE;
     const glass = [{ clipPath: this._from }, { clipPath: full }];
     menu.animate(opening ? glass : [...glass].reverse(), { duration, easing, fill: 'both' });
+    // stretched out of the button (more along the way it grows), past its size, back: from the button, so it pulls
+    const pulled = { transform: 'scale(0.85, 0.55)' }, settled = { transform: 'none' };
+    if (opening) menu.animate([pulled, settled], { duration: STRETCH.duration, easing: STRETCH.easing, fill: 'both' });
+    else menu.animate([settled, pulled], { duration, easing, fill: 'both' });
     if (canAnimate(shadow)) {
       const r = shadow.getBoundingClientRect();
       const sx = a.width / Math.max(r.width, 1), sy = a.height / Math.max(r.height, 1);
@@ -258,10 +264,12 @@ export class StMenu {
       shadow.animate(opening ? [small, big] : [big, small], { duration, easing, fill: 'both' });
     }
     if (canAnimate(body)) {
-      const hidden = { opacity: 0, filter: 'blur(10px)', transform: 'scale(0.8)' };
-      const shown = { opacity: 1, filter: 'blur(0px)', transform: 'none' };
-      if (opening) body.animate([hidden, shown], { duration: Math.round(duration * 0.6), delay: 40, easing: 'ease-out', fill: 'both' });
-      else body.animate([shown, hidden], { duration: Math.round(duration * 0.5), easing: 'ease-in', fill: 'both' });
+      // the rows smeared along the stretch, sharp as it settles
+      const smeared = { opacity: 0, filter: 'blur(12px)', transform: 'scale(0.9, 1.5)' };
+      const settling = { offset: 0.55, opacity: 1, filter: 'blur(3px)', transform: 'scale(1, 1.08)' };
+      const sharp = { opacity: 1, filter: 'blur(0px)', transform: 'none' };
+      if (opening) body.animate([smeared, settling, sharp], { duration: Math.round(STRETCH.duration * 0.6), delay: 30, easing: 'ease-out', fill: 'both' });
+      else body.animate([sharp, smeared], { duration: Math.round(duration * 0.5), easing: 'ease-in', fill: 'both' });
     }
     return opening ? 0 : duration;
   }
