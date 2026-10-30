@@ -177,6 +177,9 @@ async function card(config, states, calls = []) {
     if (this.classList.contains('navbar')) return box(0, 690, 400, 80);
     return gbr.call(this);
   };
+  // (and the menu its size: 280×170)
+  for (const [k, v] of [['offsetWidth', 280], ['offsetHeight', 170]])
+    Object.defineProperty(w.HTMLElement.prototype, k, { configurable: true, get() { return this.classList?.contains('st-menu') ? v : 0; } });
   // (a browser's animate(): it throws on an easing it can't read, as WebKit does on linear(NaN, …))
   const anims = [];
   w.HTMLElement.prototype.animate = function (frames, opts) {
@@ -196,8 +199,9 @@ async function card(config, states, calls = []) {
   ok('…each row: label, detail (templated), icon', rows()[0].querySelector('.st-menu-label')?.textContent === 'Home' && rows()[0].querySelector('.st-menu-detail')?.textContent === '3 on' && rows()[0].querySelector('ha-icon')?.getAttribute('icon') === 'mdi:home' && !rows()[1].querySelector('.st-menu-detail'));
   ok('…sections under headings, a line between', [...r.querySelectorAll('.st-menu-section')].map(x => x.textContent).join() === 'Floors,Other' && r.querySelectorAll('.st-menu-gap').length === 2);
   ok('…the current one checked, the others not', !!rows()[0].querySelector('.st-menu-check svg') && !rows()[1].querySelector('.st-menu-check svg'));
-  ok('…its glass grows from the button\'s capsule, on its edge by the button', anims.some(an => an.el.classList.contains('st-menu') && /^inset\(\d+px \d+px 0px \d+px round/.test(an.frames[0].clipPath)), anims.map(an => an.frames[0]));
-  ok('…beside its button (over the bar, not on it)', parseFloat(r.querySelector('.st-menu').style.top) + parseFloat(r.querySelector('.st-menu').style.height) <= 690, r.querySelector('.st-menu').style.top);
+  ok('…its glass grows from the button\'s capsule', anims.some(an => an.el.classList.contains('st-menu') && /^inset\(\d+px \d+px \d+px \d+px round 30px\)/.test(an.frames[0].clipPath)), anims.map(an => an.frames[0]));
+  ok('…over its button, sharing its bottom edge (a bottom bar)', parseFloat(r.querySelector('.st-menu').style.top) + parseFloat(r.querySelector('.st-menu').style.height) === 760, r.querySelector('.st-menu').style.top);
+  ok('…and its left edge (a button in the left third)', r.querySelector('.st-menu').style.left === '100px', r.querySelector('.st-menu').style.left);
   ok('…grown out of its button (its rows from the button)', /px/.test(r.querySelector('.st-menu-body').style.transformOrigin) && /px/.test(r.querySelector('.st-menu-shadow').style.width) && r.querySelector('.st-menu').classList.contains('visible'));
   ev('pointermove', 130, 425); ev('pointermove', 130, 430); ev('pointermove', 130, 475);
   ok('menu: dragged along it, the row under the finger lit, a tick per new row', rows()[1].classList.contains('active') && ticks.join() === 'selection,selection', ticks);

@@ -173,28 +173,35 @@ export class StMenu {
       </div>`;
   }
 
-  /** Beside its button: over a bar along the bottom (under one along the top), beside a rail */
+  /** Over its button, as iOS 26's: it shares the button's edges, the one toward the bar's own edge of the screen (a
+   * bottom bar's: its bottom; a top one's: its top; a rail's: its top) and the one toward the screen's nearer side,
+   * and grows from there toward the middle (a button in the middle third: centred on it) */
   private _place(): void {
     const menu = this._menu(), a = this._anchor;
     if (!menu || !a) return;
-    const M = 12, G = 10, vw = window.innerWidth, vh = window.innerHeight;
+    const M = 8, vw = window.innerWidth, vh = window.innerHeight;
     const bar = this._target?.parentElement?.getBoundingClientRect();
     const rail = !!bar && bar.height > bar.width;
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
-    let w = menu.offsetWidth, h = menu.offsetHeight, left: number, top: number;
+    let w = menu.offsetWidth, h = menu.offsetHeight, top: number;
     if (rail) {
-      left = a.left + a.width / 2 < vw / 2 ? a.right + G : a.left - G - w;
+      if (h > vh - 2 * M) {
+        menu.style.maxHeight = `${vh - 2 * M}px`;
+        h = menu.offsetHeight;
+      }
       top = clamp(a.top, M, vh - h - M);
     } else {
       const up = a.top + a.height / 2 > vh / 2;
-      const room = up ? a.top - G - M : vh - a.bottom - G - M;
+      const room = up ? a.bottom - M : vh - a.top - M;
       if (h > room) {
         menu.style.maxHeight = `${Math.max(room, 120)}px`;
         h = menu.offsetHeight;
       }
-      top = up ? a.top - G - h : a.bottom + G;
-      left = clamp(a.left + a.width / 2 - w / 2, M, vw - w - M);
+      top = clamp(up ? a.bottom - h : a.top, M, vh - h - M);
     }
+    const mid = a.left + a.width / 2;
+    const side = rail ? (mid < vw / 2 ? 'left' : 'right') : mid < vw / 3 ? 'left' : mid > (2 * vw) / 3 ? 'right' : 'centre';
+    const left = clamp(side === 'left' ? a.left : side === 'right' ? a.right - w : mid - w / 2, M, vw - w - M);
     w = menu.offsetWidth;
     for (const el of [menu, this._shadow()]) {
       if (!el) continue;
@@ -203,10 +210,9 @@ export class StMenu {
       el.style.width = `${w}px`;
       el.style.height = `${h}px`;
     }
-    // the glass starts as the button's capsule on the menu's edge nearest it, in line with it
+    // the glass starts as the button's capsule (where it is, inside the menu's box)
     const cw = Math.min(a.width, w), ch = Math.min(a.height, h);
-    const x = rail ? (a.left < left ? 0 : w - cw) : clamp(a.left - left, 0, w - cw);
-    const y = rail ? clamp(a.top - top, 0, h - ch) : a.top < top ? 0 : h - ch;
+    const x = clamp(a.left - left, 0, w - cw), y = clamp(a.top - top, 0, h - ch);
     this._cap = { left: left + x, top: top + y, width: cw, height: ch };
     this._from = `inset(${y}px ${w - x - cw}px ${h - y - ch}px ${x}px round ${Math.min(cw, ch) / 2}px)`;
     this._radius = parseFloat(getComputedStyle(menu).borderTopLeftRadius) || 26;
@@ -252,7 +258,7 @@ export class StMenu {
       shadow.animate(opening ? [small, big] : [big, small], { duration, easing, fill: 'both' });
     }
     if (canAnimate(body)) {
-      const hidden = { opacity: 0, filter: 'blur(8px)', transform: 'scale(0.9)' };
+      const hidden = { opacity: 0, filter: 'blur(10px)', transform: 'scale(0.8)' };
       const shown = { opacity: 1, filter: 'blur(0px)', transform: 'none' };
       if (opening) body.animate([hidden, shown], { duration: Math.round(duration * 0.6), delay: 40, easing: 'ease-out', fill: 'both' });
       else body.animate([shown, hidden], { duration: Math.round(duration * 0.5), easing: 'ease-in', fill: 'both' });
