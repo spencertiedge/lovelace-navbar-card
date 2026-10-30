@@ -50,9 +50,9 @@ const spring = (response: number, damping: number): { easing: string; duration: 
   const n = 48, points = Array.from({ length: n + 1 }, (_, i) => (i === n ? 1 : x((duration * i) / n)).toFixed(4));
   return { easing: `linear(${points.join(', ')})`, duration: Math.round(duration * 1000) };
 };
-const OPEN = spring(0.42, 1);  // (the glass's outline: no bounce - a clip past its box shows nothing)
-const STRETCH = spring(0.5, 0.6);  // (the stretch: past its size toward where it grows, then back - iOS 26's liquid)
-const CLOSE = spring(0.3, 1);
+const OPEN = spring(0.36, 1);  // (the glass's outline: no bounce - a clip past its box shows nothing)
+const STRETCH = spring(0.43, 0.6);  // (the stretch: past its size toward where it grows, then back - iOS 26's liquid)
+const CLOSE = spring(0.26, 1);
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 const canAnimate = (el: Element | null): el is HTMLElement => !!el && typeof (el as HTMLElement).animate === 'function';
 
