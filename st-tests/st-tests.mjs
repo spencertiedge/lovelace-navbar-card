@@ -202,6 +202,7 @@ async function card(config, states, calls = []) {
   ok('…its glass grows from the button\'s capsule', anims.some(an => an.el.classList.contains('st-menu') && /^inset\(\d+px \d+px \d+px \d+px round 30px\)/.test(an.frames[0].clipPath)), anims.map(an => an.frames[0]));
   ok('…over its button, sharing its bottom edge (a bottom bar)', parseFloat(r.querySelector('.st-menu').style.top) + parseFloat(r.querySelector('.st-menu').style.height) === 760, r.querySelector('.st-menu').style.top);
   ok('…and its left edge (a button in the left third)', r.querySelector('.st-menu').style.left === '100px', r.querySelector('.st-menu').style.left);
+  ok('…nothing of the opening kept once it ends (the rows\' blur stayed drawn on the phone)', anims.filter(an => an.opts?.fill).every(an => an.opts.fill === 'backwards'), anims.map(an => an.opts?.fill));
   ok('…grown out of its button (its rows from the button)', /px/.test(r.querySelector('.st-menu-body').style.transformOrigin) && /px/.test(r.querySelector('.st-menu-shadow').style.width) && r.querySelector('.st-menu').classList.contains('visible'));
   ev('pointermove', 130, 425); ev('pointermove', 130, 430); ev('pointermove', 130, 475);
   ok('menu: dragged along it, the row under the finger lit, a tick per new row', rows()[1].classList.contains('active') && ticks.join() === 'selection,selection', ticks);

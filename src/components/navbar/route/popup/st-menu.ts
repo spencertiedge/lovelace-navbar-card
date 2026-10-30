@@ -246,29 +246,36 @@ export class StMenu {
     const body = menu.querySelector<HTMLElement>('.st-menu-body');
     if (reducedMotion()) {
       const fade = [{ opacity: 0 }, { opacity: 1 }];
-      menu.animate(opening ? fade : fade.reverse(), { duration: 150, fill: 'both' });
+      menu.animate(opening ? fade : fade.reverse(), { duration: 150, fill: opening ? 'backwards' : 'both' });
       return 150;
     }
     const { easing, duration } = opening ? OPEN : CLOSE;
+    // opening: held at its first frame only - once done the menu is its own style again (held at the last, WebKit
+    // left the rows' blur drawn after it had ended); closing: held at the last, until it's taken away
+    const fill: FillMode = opening ? 'backwards' : 'both';
     const glass = [{ clipPath: this._from }, { clipPath: full }];
-    menu.animate(opening ? glass : [...glass].reverse(), { duration, easing, fill: 'both' });
+    menu.animate(opening ? glass : [...glass].reverse(), { duration, easing, fill });
     // stretched out of the button (more along the way it grows), past its size, back: from the button, so it pulls
     const pulled = { transform: 'scale(0.85, 0.55)' }, settled = { transform: 'none' };
-    if (opening) menu.animate([pulled, settled], { duration: STRETCH.duration, easing: STRETCH.easing, fill: 'both' });
-    else menu.animate([settled, pulled], { duration, easing, fill: 'both' });
+    if (opening) menu.animate([pulled, settled], { duration: STRETCH.duration, easing: STRETCH.easing, fill });
+    else menu.animate([settled, pulled], { duration, easing, fill });
     if (canAnimate(shadow)) {
       const r = shadow.getBoundingClientRect();
       const sx = a.width / Math.max(r.width, 1), sy = a.height / Math.max(r.height, 1);
       const small = { transform: `translate(${a.left - r.left}px, ${a.top - r.top}px) scale(${sx}, ${sy})`, opacity: 0 };
       const big = { transform: 'none', opacity: 1 };
-      shadow.animate(opening ? [small, big] : [big, small], { duration, easing, fill: 'both' });
+      shadow.animate(opening ? [small, big] : [big, small], { duration, easing, fill });
     }
     if (canAnimate(body)) {
       // the rows smeared along the stretch, sharp as it settles
       const smeared = { opacity: 0, filter: 'blur(12px)', transform: 'scale(0.9, 1.5)' };
       const settling = { offset: 0.55, opacity: 1, filter: 'blur(3px)', transform: 'scale(1, 1.08)' };
       const sharp = { opacity: 1, filter: 'blur(0px)', transform: 'none' };
-      if (opening) body.animate([smeared, settling, sharp], { duration: Math.round(STRETCH.duration * 0.6), delay: 30, easing: 'ease-out', fill: 'both' });
+      if (opening) {
+        const rows = body.animate([smeared, settling, sharp], { duration: Math.round(STRETCH.duration * 0.6), delay: 30, easing: 'ease-out', fill });
+        // (and once it's ended, nothing of it left on the rows: WebKit can keep a filter's last frame drawn)
+        rows.finished?.then(() => rows.cancel(), () => {});
+      }
       else body.animate([sharp, smeared], { duration: Math.round(duration * 0.5), easing: 'ease-in', fill: 'both' });
     }
     return opening ? 0 : duration;
