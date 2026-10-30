@@ -187,7 +187,7 @@ async function card(config, states, calls = []) {
   ok('…each row: label, detail (templated), icon', rows()[0].querySelector('.st-menu-label')?.textContent === 'Home' && rows()[0].querySelector('.st-menu-detail')?.textContent === '3 on' && rows()[0].querySelector('ha-icon')?.getAttribute('icon') === 'mdi:home' && !rows()[1].querySelector('.st-menu-detail'));
   ok('…sections under headings, a line between', [...r.querySelectorAll('.st-menu-section')].map(x => x.textContent).join() === 'Floors,Other' && r.querySelectorAll('.st-menu-gap').length === 2);
   ok('…the current one checked, the others not', !!rows()[0].querySelector('.st-menu-check svg') && !rows()[1].querySelector('.st-menu-check svg'));
-  ok('…grown from its button (placed above it, origin at the button)', /px/.test(r.querySelector('.st-menu').style.transformOrigin) && r.querySelector('.st-menu').classList.contains('visible'));
+  ok('…grown out of its button (over it, its rows from the button)', /px/.test(r.querySelector('.st-menu-body').style.transformOrigin) && /px/.test(r.querySelector('.st-menu-shadow').style.width) && r.querySelector('.st-menu').classList.contains('visible'));
   ev('pointermove', 130, 425); ev('pointermove', 130, 430); ev('pointermove', 130, 475);
   ok('menu: dragged along it, the row under the finger lit, a tick per new row', rows()[1].classList.contains('active') && ticks.join() === 'selection,selection', ticks);
   ev('pointerup', 130, 475); routes[1].dispatchEvent(new w.MouseEvent('click', { bubbles: true, composed: true }));
