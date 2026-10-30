@@ -39,8 +39,12 @@ const CHECK = html`<svg viewBox="0 0 24 24" aria-hidden="true">
 
 // iOS's spring, as CSS's linear() easing: `response` (s) and damping ratio; its duration is when it has settled
 const spring = (response: number, damping: number): { easing: string; duration: number } => {
-  const w = (2 * Math.PI) / response, wd = w * Math.sqrt(1 - damping * damping);
-  const x = (t: number) => 1 - Math.exp(-damping * w * t) * (Math.cos(wd * t) + ((damping * w) / wd) * Math.sin(wd * t));
+  const w = (2 * Math.PI) / response, wd = w * Math.sqrt(Math.max(1 - damping * damping, 0));
+  // (critically damped, wd 0: its own form - the general one divides by it, NaN, and animate() throws on the easing)
+  const x = (t: number) =>
+    wd < 1e-6
+      ? 1 - Math.exp(-w * t) * (1 + w * t)
+      : 1 - Math.exp(-damping * w * t) * (Math.cos(wd * t) + ((damping * w) / wd) * Math.sin(wd * t));
   let duration = response;
   while (duration < 2 && Math.exp(-damping * w * duration) > 0.002) duration += 0.02;
   const n = 48, points = Array.from({ length: n + 1 }, (_, i) => (i === n ? 1 : x((duration * i) / n)).toFixed(4));
@@ -64,8 +68,9 @@ export class StMenu {
   // the press that opened it: lifted where it landed it leaves the menu open (the row under it isn't chosen)
   private _openingPress = false;
   private _moved = false;
-  // where its glass starts and ends: the button's capsule, as insets of the menu's box
+  // where its glass starts: a capsule the button's size on the menu's edge by the button (insets of its box)
   private _from = '';
+  private _cap?: { left: number; top: number; width: number; height: number };
   private _radius = 26;
 
   constructor(
@@ -98,6 +103,11 @@ export class StMenu {
     window.addEventListener('keydown', this._onKey);
     if (pressing) this._track();
     this._navbarCard.updateComplete.then(() => {
+      // (opened again before the last one was taken away: the same element, still closing)
+      const menu = this._menu();
+      menu?.classList.remove('closing');
+      for (const el of [menu, this._shadow(), menu?.querySelector('.st-menu-body')])
+        (el as HTMLElement | null)?.getAnimations?.().forEach(an => an.cancel());
       this._place();
       this._morph(true);
     });
@@ -163,31 +173,26 @@ export class StMenu {
       </div>`;
   }
 
-  /** Over its button, as iOS 26's: grown out of it, an edge kept where the button's is (along a bar: over it, toward
-   * the screen; on a rail: its top and outer side at the button's) */
+  /** Beside its button: over a bar along the bottom (under one along the top), beside a rail */
   private _place(): void {
     const menu = this._menu(), a = this._anchor;
     if (!menu || !a) return;
-    const M = 8, vw = window.innerWidth, vh = window.innerHeight;
+    const M = 12, G = 10, vw = window.innerWidth, vh = window.innerHeight;
     const bar = this._target?.parentElement?.getBoundingClientRect();
     const rail = !!bar && bar.height > bar.width;
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
     let w = menu.offsetWidth, h = menu.offsetHeight, left: number, top: number;
     if (rail) {
-      if (h > vh - 2 * M) {
-        menu.style.maxHeight = `${vh - 2 * M}px`;
-        h = menu.offsetHeight;
-      }
-      left = clamp(a.left + a.width / 2 < vw / 2 ? a.left : a.right - w, M, vw - w - M);
+      left = a.left + a.width / 2 < vw / 2 ? a.right + G : a.left - G - w;
       top = clamp(a.top, M, vh - h - M);
     } else {
       const up = a.top + a.height / 2 > vh / 2;
-      const room = up ? a.bottom - M : vh - a.top - M;
+      const room = up ? a.top - G - M : vh - a.bottom - G - M;
       if (h > room) {
         menu.style.maxHeight = `${Math.max(room, 120)}px`;
         h = menu.offsetHeight;
       }
-      top = clamp(up ? a.bottom - h : a.top, M, vh - h - M);
+      top = up ? a.top - G - h : a.bottom + G;
       left = clamp(a.left + a.width / 2 - w / 2, M, vw - w - M);
     }
     w = menu.offsetWidth;
@@ -198,22 +203,36 @@ export class StMenu {
       el.style.width = `${w}px`;
       el.style.height = `${h}px`;
     }
-    // the button's capsule, as insets of the menu's box (its corners round as it is)
-    const t = a.top - top, l = a.left - left, r = left + w - a.right, b = top + h - a.bottom;
-    this._from = `inset(${t}px ${r}px ${b}px ${l}px round ${Math.min(a.width, a.height) / 2}px)`;
+    // the glass starts as the button's capsule on the menu's edge nearest it, in line with it
+    const cw = Math.min(a.width, w), ch = Math.min(a.height, h);
+    const x = rail ? (a.left < left ? 0 : w - cw) : clamp(a.left - left, 0, w - cw);
+    const y = rail ? clamp(a.top - top, 0, h - ch) : a.top < top ? 0 : h - ch;
+    this._cap = { left: left + x, top: top + y, width: cw, height: ch };
+    this._from = `inset(${y}px ${w - x - cw}px ${h - y - ch}px ${x}px round ${Math.min(cw, ch) / 2}px)`;
     this._radius = parseFloat(getComputedStyle(menu).borderTopLeftRadius) || 26;
     const body = menu.querySelector<HTMLElement>('.st-menu-body');
-    if (body) body.style.transformOrigin = `${a.left + a.width / 2 - left}px ${a.top + a.height / 2 - top}px`;
+    if (body) body.style.transformOrigin = `${x + cw / 2}px ${y + ch / 2}px`;
     // (a menu that scrolls lets the finger scroll it; one that doesn't keeps the drag)
     if (menu.scrollHeight > menu.clientHeight + 1) menu.style.touchAction = 'pan-y';
   }
 
   /** iOS 26's menu: the button's glass grows into the menu (a spring, a little bounce), its rows coming in out of a
-   * blur; closing, it goes back into the button. Returns how long that takes (ms) */
+   * blur; closing, it goes back into the button. Returns how long that takes (ms); an animation that fails is
+   * skipped (never a menu left on screen that can't be used or closed) */
   private _morph(opening: boolean): number {
-    const menu = this._menu(), shadow = this._shadow(), a = this._anchor;
+    const menu = this._menu();
     if (!menu) return 0;
     menu.classList.toggle('visible', opening);
+    try {
+      return this._animate(menu, opening);
+    } catch (err) {
+      console.warn('navbar-card: menu animation', err);
+      return 0;
+    }
+  }
+
+  private _animate(menu: HTMLElement, opening: boolean): number {
+    const shadow = this._shadow(), a = this._cap;
     if (!canAnimate(menu) || !a || !this._from) return 0;
     const full = `inset(0px 0px 0px 0px round ${this._radius}px)`;
     const body = menu.querySelector<HTMLElement>('.st-menu-body');
@@ -286,7 +305,7 @@ export class StMenu {
   }
 
   private _onMove = (ev: PointerEvent): void => {
-    // (the menu opens over the button: the press that opened it lights nothing until it moves)
+    // (the press that opened it lights nothing until it moves)
     if (!this._moved && Math.hypot(ev.clientX - pressAt.x, ev.clientY - pressAt.y) < 8) return;
     this._moved = true;
     this._setActive(this._rowAt(ev.clientX, ev.clientY), true);

@@ -177,6 +177,15 @@ async function card(config, states, calls = []) {
     if (this.classList.contains('navbar')) return box(0, 690, 400, 80);
     return gbr.call(this);
   };
+  // (a browser's animate(): it throws on an easing it can't read, as WebKit does on linear(NaN, …))
+  const anims = [];
+  w.HTMLElement.prototype.animate = function (frames, opts) {
+    if (/NaN/.test(opts?.easing ?? '')) throw new w.TypeError(`bad easing ${opts.easing.slice(0, 30)}`);
+    const an = { el: this, frames, opts, cancel() { an.cancelled = true; } };
+    anims.push(an);
+    return an;
+  };
+  w.HTMLElement.prototype.getAnimations = function () { return anims.filter(an => an.el === this && !an.cancelled); };
   const routes = [...r.querySelectorAll('.route')];
   const ev = (t, x, y, target = w) => target.dispatchEvent(new w.PointerEvent(t, { bubbles: true, composed: true, clientX: x, clientY: y }));
   const settle = async (ms = 30) => { await el.updateComplete; await new Promise(res => setTimeout(res, ms)); };
@@ -187,7 +196,9 @@ async function card(config, states, calls = []) {
   ok('…each row: label, detail (templated), icon', rows()[0].querySelector('.st-menu-label')?.textContent === 'Home' && rows()[0].querySelector('.st-menu-detail')?.textContent === '3 on' && rows()[0].querySelector('ha-icon')?.getAttribute('icon') === 'mdi:home' && !rows()[1].querySelector('.st-menu-detail'));
   ok('…sections under headings, a line between', [...r.querySelectorAll('.st-menu-section')].map(x => x.textContent).join() === 'Floors,Other' && r.querySelectorAll('.st-menu-gap').length === 2);
   ok('…the current one checked, the others not', !!rows()[0].querySelector('.st-menu-check svg') && !rows()[1].querySelector('.st-menu-check svg'));
-  ok('…grown out of its button (over it, its rows from the button)', /px/.test(r.querySelector('.st-menu-body').style.transformOrigin) && /px/.test(r.querySelector('.st-menu-shadow').style.width) && r.querySelector('.st-menu').classList.contains('visible'));
+  ok('…its glass grows from the button\'s capsule, on its edge by the button', anims.some(an => an.el.classList.contains('st-menu') && /^inset\(\d+px \d+px 0px \d+px round/.test(an.frames[0].clipPath)), anims.map(an => an.frames[0]));
+  ok('…beside its button (over the bar, not on it)', parseFloat(r.querySelector('.st-menu').style.top) + parseFloat(r.querySelector('.st-menu').style.height) <= 690, r.querySelector('.st-menu').style.top);
+  ok('…grown out of its button (its rows from the button)', /px/.test(r.querySelector('.st-menu-body').style.transformOrigin) && /px/.test(r.querySelector('.st-menu-shadow').style.width) && r.querySelector('.st-menu').classList.contains('visible'));
   ev('pointermove', 130, 425); ev('pointermove', 130, 430); ev('pointermove', 130, 475);
   ok('menu: dragged along it, the row under the finger lit, a tick per new row', rows()[1].classList.contains('active') && ticks.join() === 'selection,selection', ticks);
   ev('pointerup', 130, 475); routes[1].dispatchEvent(new w.MouseEvent('click', { bubbles: true, composed: true }));
