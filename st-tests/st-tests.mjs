@@ -220,6 +220,13 @@ async function card(config, states, calls = []) {
   ev('pointerdown', 130, 730, routes[1]); ev('pointerup', 130, 730); await settle();
   ev('pointerdown', 380, 100, r.querySelector('.st-menu-backdrop')); ev('pointerup', 380, 100); await settle(600);
   ok('menu: a tap outside closes it', !r.querySelector('.st-menu') && !r.querySelector('.st-menu-backdrop'));
+  // (a safe area: 200 px down the left - the button at 100 px is inside it, as the outside display's are by its camera)
+  const gcs = w.getComputedStyle;
+  w.getComputedStyle = el => el.dataset?.stSafeArea !== undefined ? { paddingTop: '0px', paddingRight: '0px', paddingBottom: '0px', paddingLeft: '200px' } : gcs(el);
+  ev('pointerdown', 130, 730, routes[1]); ev('pointerup', 130, 730); await settle();
+  ok('menu: kept out of the safe area (the camera\'s cutout)', r.querySelector('.st-menu')?.style.left === '208px', r.querySelector('.st-menu')?.style.left);
+  w.getComputedStyle = gcs;
+  ev('pointerdown', 380, 100, r.querySelector('.st-menu-backdrop')); ev('pointerup', 380, 100); await settle(600);
   // a hold's: opens as the hold fires, the finger still down, then follows it the same
   ev('pointerdown', 130, 730, routes[2]); await settle(700);
   ok('menu: a hold\'s opens with the finger still down (the hold\'s own haptic as it does)', rows().length === 3 && ticks.length === 3, ticks);

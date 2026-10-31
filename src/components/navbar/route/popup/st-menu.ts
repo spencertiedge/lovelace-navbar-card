@@ -54,6 +54,18 @@ const OPEN = spring(0.36, 1);  // (the glass's outline: no bounce - a clip past 
 const STRETCH = spring(0.43, 0.6);  // (the stretch: past its size toward where it grows, then back - iOS 26's liquid)
 const CLOSE = OPEN;  // (as long as it took to open: ST, 2026-10-30)
 const reducedMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+// the screen's safe area (the status bar, the camera's cutout, the home bar): a probe padded by env()'s insets
+const safeArea = (): { top: number; right: number; bottom: number; left: number } => {
+  const probe = document.createElement('div');
+  probe.dataset.stSafeArea = '';
+  probe.style.cssText =
+    'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
+  document.body.appendChild(probe);
+  const cs = getComputedStyle(probe), px = (v: string) => parseFloat(v) || 0;
+  const inset = { top: px(cs.paddingTop), right: px(cs.paddingRight), bottom: px(cs.paddingBottom), left: px(cs.paddingLeft) };
+  probe.remove();
+  return inset;
+};
 const canAnimate = (el: Element | null): el is HTMLElement => !!el && typeof (el as HTMLElement).animate === 'function';
 
 export class StMenu {
@@ -181,28 +193,33 @@ export class StMenu {
     const menu = this._menu(), a = this._anchor;
     if (!menu || !a) return;
     const M = 8, vw = window.innerWidth, vh = window.innerHeight;
+    // (kept inside the safe area: a button in the status bar's strip - the outside display's rail or menu button - has
+    // the camera's cutout beside it; ST, 2026-10-30)
+    const safe = safeArea();
+    const minX = M + safe.left, maxX = (w: number) => vw - w - M - safe.right;
+    const minY = M + safe.top, maxY = (h: number) => vh - h - M - safe.bottom;
     const bar = this._target?.parentElement?.getBoundingClientRect();
     const rail = !!bar && bar.height > bar.width;
     const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
     let w = menu.offsetWidth, h = menu.offsetHeight, top: number;
     if (rail) {
-      if (h > vh - 2 * M) {
-        menu.style.maxHeight = `${vh - 2 * M}px`;
+      if (h > maxY(0) - minY) {
+        menu.style.maxHeight = `${maxY(0) - minY}px`;
         h = menu.offsetHeight;
       }
-      top = clamp(a.top, M, vh - h - M);
+      top = clamp(a.top, minY, maxY(h));
     } else {
       const up = a.top + a.height / 2 > vh / 2;
-      const room = up ? a.bottom - M : vh - a.top - M;
+      const room = up ? a.bottom - minY : maxY(0) - a.top;
       if (h > room) {
         menu.style.maxHeight = `${Math.max(room, 120)}px`;
         h = menu.offsetHeight;
       }
-      top = clamp(up ? a.bottom - h : a.top, M, vh - h - M);
+      top = clamp(up ? a.bottom - h : a.top, minY, maxY(h));
     }
     const mid = a.left + a.width / 2;
     const side = rail ? (mid < vw / 2 ? 'left' : 'right') : mid < vw / 3 ? 'left' : mid > (2 * vw) / 3 ? 'right' : 'centre';
-    const left = clamp(side === 'left' ? a.left : side === 'right' ? a.right - w : mid - w / 2, M, vw - w - M);
+    const left = clamp(side === 'left' ? a.left : side === 'right' ? a.right - w : mid - w / 2, minX, maxX(w));
     w = menu.offsetWidth;
     for (const el of [menu, this._shadow()]) {
       if (!el) continue;
