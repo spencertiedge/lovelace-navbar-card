@@ -239,5 +239,71 @@ async function card(config, states, calls = []) {
   ok('no script errors (menu)', !errors.length, errors);
 }
 
+// ST fork (2026-11-13): a row with a submenu - a ›, its rows in the same menu under a ‹ Back row, the glass resized and the
+// rows slid in; Back (or Escape) returns; a submenu row chosen runs its action and closes
+{
+  const { w, el, r, errors } = await card({ popup_style: 'menu', routes: [
+    { url: '/lovelace/home', icon: 'mdi:home', label: 'Home', selected: true },
+    { icon: 'mdi:menu', label: 'More', tap_action: { action: 'open-popup' }, popup: [
+      { label: 'Sections', section: 'This page', detail: 'Collapsed', submenu: [
+        { label: 'All', tap_action: { action: 'perform-action', perform_action: 'script.all' } },
+        { label: 'Active only', tap_action: { action: 'perform-action', perform_action: 'script.active' } },
+        { label: 'Collapsed', selected: true, tap_action: { action: 'perform-action', perform_action: 'script.collapsed' } },
+      ] },
+      { url: '/lovelace/b', label: 'Basement' },
+    ] },
+  ] }, {});
+  const ticks = []; w.addEventListener('haptic', e => ticks.push(e.detail));
+  const actions = []; w.addEventListener('hass-action', e => actions.push(e.detail));
+  const gbr = w.HTMLElement.prototype.getBoundingClientRect;
+  w.HTMLElement.prototype.getBoundingClientRect = function () {
+    const box = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height, x: left, y: top });
+    if (this.classList.contains('st-menu-row')) return box(20, 400 + 50 * (Number(this.dataset.i) + 2), 260, 50);  // (Back, -2, at 400)
+    if (this.classList.contains('st-menu')) return box(12, 390, 280, 170);
+    if (this.classList.contains('route')) return box(100, 700, 60, 60);
+    if (this.classList.contains('navbar')) return box(0, 690, 400, 80);
+    return gbr.call(this);
+  };
+  for (const [k, v] of [['offsetWidth', 280], ['offsetHeight', 170]])
+    Object.defineProperty(w.HTMLElement.prototype, k, { configurable: true, get() { return this.classList?.contains('st-menu') ? v : 0; } });
+  const anims = [];
+  w.HTMLElement.prototype.animate = function (frames, opts) {
+    if (/NaN/.test(opts?.easing ?? '')) throw new w.TypeError(`bad easing ${opts.easing.slice(0, 30)}`);
+    const an = { el: this, frames, opts, cancel() { an.cancelled = true; } };
+    anims.push(an);
+    return an;
+  };
+  w.HTMLElement.prototype.getAnimations = function () { return anims.filter(an => an.el === this && !an.cancelled); };
+  const routes = [...r.querySelectorAll('.route')];
+  const ev = (t, x, y, target = w) => target.dispatchEvent(new w.PointerEvent(t, { bubbles: true, composed: true, clientX: x, clientY: y }));
+  const settle = async (ms = 30) => { await el.updateComplete; await new Promise(res => setTimeout(res, ms)); };
+  const rows = () => [...r.querySelectorAll('.st-menu .st-menu-row')];
+  const y = i => 400 + 50 * (i + 2) + 25;
+  ev('pointerdown', 130, 730, routes[1]); ev('pointerup', 130, 730); await settle();
+  ok('submenu: its row has a › (and says it opens a menu), its detail', rows()[0].classList.contains('st-menu-opens') && !!rows()[0].querySelector('.st-menu-more svg')
+    && rows()[0].getAttribute('aria-haspopup') === 'menu' && rows()[0].querySelector('.st-menu-detail')?.textContent === 'Collapsed' && !rows()[1].querySelector('.st-menu-more'));
+  anims.length = 0; ticks.length = 0;
+  ev('pointerdown', 130, y(0), r.querySelector('.st-menu')); ev('pointerup', 130, y(0)); await settle();
+  ok('…tapped: its rows in the same menu, a Back row (its label) first, nothing run, still open', rows().length === 4 && rows()[0].classList.contains('st-menu-back')
+    && rows()[0].querySelector('.st-menu-label')?.textContent === 'Sections' && rows()[3].querySelector('.st-menu-check svg') && !actions.length && !!r.querySelector('.st-menu.visible'),
+    rows().map(x => x.textContent.trim()));
+  ok('…the rows slid in from the right, the glass resized, a tick', anims.some(an => an.el.classList.contains('st-menu-body') && /translateX\(28px\)/.test(an.frames[0].transform))
+    && anims.some(an => an.el.classList.contains('st-menu') && an.frames[0].width) && ticks.includes('selection'), anims.map(an => an.frames[0]));
+  anims.length = 0;
+  ev('pointerdown', 130, y(-2), r.querySelector('.st-menu')); ev('pointerup', 130, y(-2)); await settle();
+  ok('…Back: the first rows again, slid in from the left', rows().length === 2 && rows()[0].classList.contains('st-menu-opens')
+    && anims.some(an => an.el.classList.contains('st-menu-body') && /translateX\(-28px\)/.test(an.frames[0].transform)));
+  ev('pointerdown', 130, y(0), r.querySelector('.st-menu')); ev('pointerup', 130, y(0)); await settle();
+  w.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape' })); await settle();
+  ok('…Escape in a submenu: back, not closed', rows().length === 2 && !!r.querySelector('.st-menu.visible'));
+  ev('pointerdown', 130, y(0), r.querySelector('.st-menu')); ev('pointerup', 130, y(0)); await settle();
+  ev('pointerdown', 130, y(1), r.querySelector('.st-menu')); ev('pointerup', 130, y(1)); await settle(400);
+  ok('…a submenu row chosen: its action runs, the menu closes', actions.some(a => JSON.stringify(a).includes('script.active')) && !r.querySelector('.st-menu'), actions);
+  ev('pointerdown', 130, 730, routes[1]); ev('pointerup', 130, 730); await settle();
+  ok('…opened again: from the top, not the submenu', rows().length === 2 && !rows()[0].classList.contains('st-menu-back'));
+  w.HTMLElement.prototype.getBoundingClientRect = gbr;
+  ok('no script errors (submenu)', !errors.length, errors);
+}
+
 console.log(`\n${fails} failure(s)`);
 process.exit(fails ? 1 : 0);

@@ -1,8 +1,9 @@
 import { css, html, nothing, type TemplateResult } from 'lit';
 import { classMap } from 'lit/directives/class-map.js';
 
-import type { Popup, PopupItem } from '@/components/navbar';
+import { PopupItem, type Popup } from '@/components/navbar';
 import { executeAction } from '@/lib/action-handler';
+import type { PopupItem as PopupItemDef } from '@/types';
 import type { NavbarCard } from '@/navbar-card';
 import { fireDOMEvent, processTemplate } from '@/utils';
 
@@ -13,7 +14,9 @@ import { fireDOMEvent, processTemplate } from '@/utils';
  * along it lights the row under it, a haptic tick each time that changes (Home Assistant's app plays the window's
  * `haptic` events); lifting on a row chooses it, on the button or the menu leaves it open to tap, elsewhere closes
  * it. Rows: a checkmark on the current one, label, an optional detail line (`detail`, templatable), icon on the right;
- * sections (`section`) under headings.
+ * sections (`section`) under headings. A row with a `submenu` (ST, 2026-11-13) shows a › and opens its rows in the
+ * same menu, a ‹ Back row (the row's own label) over them; the glass resizes and the rows slide in from the side, as
+ * iOS's nested menus.
  */
 
 // a finger (or button) down anywhere, seen first (capture): a menu opened while one is down follows it
@@ -31,6 +34,13 @@ if (typeof window !== 'undefined') {
   for (const t of ['pointerup', 'pointercancel'])
     window.addEventListener(t, () => (pressing = false), true);
 }
+
+const CHEVRON = (left: boolean) => html`<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d=${left ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'} fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
+    stroke-linejoin="round" />
+</svg>`;
+// a row's data-i for the Back row of a submenu
+const BACK = -2;
 
 const CHECK = html`<svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"
@@ -85,6 +95,9 @@ export class StMenu {
   private _from = '';
   private _cap?: { left: number; top: number; width: number; height: number };
   private _radius = 26;
+  // (a submenu showing) the rows it opened with, to go back to, and the row's label for the Back row
+  private _top: PopupItem[] | null = null;
+  private _subTitle = '';
 
   constructor(
     private readonly _navbarCard: NavbarCard,
@@ -103,6 +116,7 @@ export class StMenu {
   public open(target: HTMLElement, press = false): void {
     if (!press && Date.now() < this._ignoreOpenUntil) return;  // (a new press always opens it)
     this._items = this._popup.items.filter(item => !item.hidden);
+    this._top = null;
     if (!this._items.length) return;
     clearTimeout(this._removal);
     this._target = target;
@@ -162,9 +176,11 @@ export class StMenu {
       const label = processTemplate<string>(hass, this._navbarCard, item.data.label) || item.url || '';
       const detail = processTemplate<string>(hass, this._navbarCard, item.data.detail);
       const icon = processTemplate<string>(hass, this._navbarCard, item.data.icon);
+      const sub = !!item.data.submenu?.length;
       return html`${heading}<div
-          class=${classMap({ 'st-menu-row': true, current: item.selected })}
+          class=${classMap({ 'st-menu-row': true, current: item.selected, 'st-menu-opens': sub })}
           role="menuitem"
+          aria-haspopup=${sub ? 'menu' : nothing}
           data-i=${i}>
           ${checks ? html`<span class="st-menu-check">${item.selected ? CHECK : nothing}</span>` : nothing}
           <span class="st-menu-text">
@@ -172,8 +188,16 @@ export class StMenu {
             ${detail ? html`<span class="st-menu-detail">${detail}</span>` : nothing}
           </span>
           ${icon ? html`<ha-icon class="st-menu-icon" icon=${icon}></ha-icon>` : nothing}
+          ${sub ? html`<span class="st-menu-more">${CHEVRON(false)}</span>` : nothing}
         </div>`;
     });
+    // (a submenu: its Back row first, the row's own label beside a ‹)
+    const back = this._top
+      ? html`<div class="st-menu-row st-menu-back" role="menuitem" aria-label=${`Back to ${this._subTitle}`} data-i=${BACK}>
+            <span class="st-menu-more">${CHEVRON(true)}</span>
+            <span class="st-menu-text"><span class="st-menu-label">${this._subTitle}</span></span>
+          </div><div class="st-menu-gap"></div>`
+      : nothing;
     return html`<div class="st-menu-backdrop" @pointerdown=${this._onBackdropDown}></div>
       <div class="st-menu-shadow"></div>
       <div
@@ -182,7 +206,7 @@ export class StMenu {
         @pointerdown=${this._onMenuDown}
         @pointermove=${this._onHover}
         @pointerleave=${this._onLeave}>
-        <div class="st-menu-body">${rows}</div>
+        <div class="st-menu-body">${back}${rows}</div>
       </div>`;
   }
 
@@ -320,7 +344,7 @@ export class StMenu {
     this._root?.querySelectorAll<HTMLElement>('.st-menu-row').forEach(row =>
       row.classList.toggle('active', Number(row.dataset.i) === i),
     );
-    if (tick && i >= 0) fireDOMEvent(window, 'haptic', { detailOverride: 'selection' });
+    if (tick && (i >= 0 || i === BACK)) fireDOMEvent(window, 'haptic', { detailOverride: 'selection' });
   }
 
   private _track(): void {
@@ -355,7 +379,7 @@ export class StMenu {
     const still = this._openingPress && !this._moved;
     this._openingPress = false;
     const i = still ? -1 : this._rowAt(ev.clientX, ev.clientY);
-    if (i >= 0) return this._choose(i);
+    if (i >= 0 || i === BACK) return this._choose(i);
     this._setActive(-1, false);
     // lifted on its button or on the menu: left open, to tap; anywhere else: closed
     const x = ev.clientX, y = ev.clientY;
@@ -397,12 +421,16 @@ export class StMenu {
   private _onKey = (ev: KeyboardEvent): void => {
     if (ev.key === 'Escape') {
       ev.preventDefault();
-      this.close();
+      if (this._top) this._back();  // (a submenu: back to the menu it came from)
+      else this.close();
     }
   };
 
   private _choose(i: number): void {
+    if (i === BACK) return this._back();
     const item = this._items[i];
+    // a row that opens a submenu: its rows, in this menu
+    if (item?.data.submenu?.length) return this._enter(item);
     const target = this._target;
     this.close();
     if (!item || !target) return;
@@ -412,6 +440,62 @@ export class StMenu {
       context: this._navbarCard,
       data: { popupItem: item },
       target,
+    });
+  }
+
+  /** A row's submenu: its rows shown in this menu, a Back row over them */
+  private _enter(item: PopupItem): void {
+    const hass = this._navbarCard._hass;
+    this._top = this._items;
+    this._subTitle = processTemplate<string>(hass, this._navbarCard, item.data.label) || '';
+    this._items = ((item.data.submenu ?? []) as PopupItemDef[])
+      .map((data, k) => new PopupItem(this._navbarCard, this._popup, data, k))
+      .filter(x => !x.hidden);
+    this._swap(1);
+  }
+
+  /** Back to the rows it came from */
+  private _back(): void {
+    if (!this._top) return;
+    this._items = this._top;
+    this._top = null;
+    this._swap(-1);
+  }
+
+  /** The rows changed in place: the glass resized (from its old box to its new one) and the rows slid in from the side
+   * they come from (forward: the right; back: the left), a haptic tick */
+  private _swap(dir: 1 | -1): void {
+    const was = this._menu()?.getBoundingClientRect();
+    this._active = -1;
+    this._navbarCard.focusedPopup = this._render();
+    fireDOMEvent(window, 'haptic', { detailOverride: 'selection' });
+    this._navbarCard.updateComplete.then(() => {
+      const m = this._menu();
+      if (!m) return;
+      for (const el of [m, this._shadow()]) {
+        if (!el) continue;
+        el.style.width = '';
+        el.style.height = '';
+        el.style.maxHeight = '';
+      }
+      this._place();
+      if (reducedMotion()) return;
+      const now = m.getBoundingClientRect();
+      try {
+        const ease = { duration: 300, easing: 'cubic-bezier(.32, .72, 0, 1)' };
+        const box = (r: DOMRect) => ({ left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+        if (was && canAnimate(m)) m.animate([box(was), box(now)], ease);
+        const sh = this._shadow();
+        if (was && canAnimate(sh)) sh.animate([box(was), box(now)], ease);
+        const body = m.querySelector<HTMLElement>('.st-menu-body');
+        if (canAnimate(body))
+          body.animate([{ transform: `translateX(${dir * 28}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], {
+            duration: 280,
+            easing: 'cubic-bezier(.32, .72, 0, 1)',
+          });
+      } catch (err) {
+        console.warn('navbar-card: submenu animation', err);
+      }
     });
   }
 }
@@ -552,6 +636,23 @@ export const ST_MENU_STYLES = css`
     height: 0.5px;
     margin: 6px 20px;
     background: var(--st-menu-separator);
+  }
+  /* a row's submenu: a › at its end; the submenu's Back row: a ‹ and the row's label, in bold */
+  .st-menu-more {
+    flex: none;
+    display: flex;
+    width: 16px;
+    color: var(--st-menu-secondary);
+  }
+  .st-menu-more svg {
+    width: 16px;
+    height: 16px;
+  }
+  .st-menu-back .st-menu-label {
+    font-weight: 600;
+  }
+  .st-menu-back .st-menu-more {
+    color: inherit;
   }
   .st-menu-section {
     padding: 6px 20px 2px;

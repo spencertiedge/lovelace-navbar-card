@@ -98,6 +98,9 @@ export type RouteItemBase = {
   section?: string;
   /** ST fork: a second line under its label in the menu (popup_style: menu), e.g. "3 on" */
   detail?: JSTemplatable<string>;
+  /** ST fork: a menu row (popup_style: menu) that opens a nested menu of these rows, with a Back row (iOS's submenu)
+   * (loosely typed: the editor's dotted-key types would recurse through it; read as PopupItem[] in st-menu.ts) */
+  submenu?: object[];
 };
 
 // Type for popup menu items (don't include popup property to avoid circular references)
