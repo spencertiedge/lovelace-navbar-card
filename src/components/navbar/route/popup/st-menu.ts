@@ -98,6 +98,8 @@ export class StMenu {
   // (a submenu showing) the rows it opened with, to go back to, and the row's label for the Back row
   private _top: PopupItem[] | null = null;
   private _subTitle = '';
+  // (a submenu showing) where the row that opened it was: its top, and the menu's right edge
+  private _subAt?: { top: number; right: number };
 
   constructor(
     private readonly _navbarCard: NavbarCard,
@@ -213,7 +215,7 @@ export class StMenu {
   /** Over its button, as iOS 26's: it shares the button's edges, the one toward the bar's own edge of the screen (a
    * bottom bar's: its bottom; a top one's: its top; a rail's: its top) and the one toward the screen's nearer side,
    * and grows from there toward the middle (a button in the middle third: centred on it) */
-  private _place(): void {
+  private _place(at?: { top: number; right: number }): void {
     const menu = this._menu(), a = this._anchor;
     if (!menu || !a) return;
     const M = 8, vw = window.innerWidth, vh = window.innerHeight;
@@ -241,9 +243,19 @@ export class StMenu {
       }
       top = clamp(up ? a.bottom - h : a.top, minY, maxY(h));
     }
+    // (a submenu: from the row that opened it - its Back row where that row was, the menu's own edge kept - growing
+    // down, kept on screen: ST, 2026-11-13, not dropped to the button)
+    if (at) {
+      if (h > maxY(0) - minY) {
+        menu.style.maxHeight = `${maxY(0) - minY}px`;
+        h = menu.offsetHeight;
+      }
+      top = clamp(at.top, minY, maxY(h));
+    }
     const mid = a.left + a.width / 2;
     const side = rail ? (mid < vw / 2 ? 'left' : 'right') : mid < vw / 3 ? 'left' : mid > (2 * vw) / 3 ? 'right' : 'centre';
-    const left = clamp(side === 'left' ? a.left : side === 'right' ? a.right - w : mid - w / 2, minX, maxX(w));
+    const left = at ? clamp(at.right - w, minX, maxX(w))
+      : clamp(side === 'left' ? a.left : side === 'right' ? a.right - w : mid - w / 2, minX, maxX(w));
     w = menu.offsetWidth;
     for (const el of [menu, this._shadow()]) {
       if (!el) continue;
@@ -446,6 +458,9 @@ export class StMenu {
   /** A row's submenu: its rows shown in this menu, a Back row over them */
   private _enter(item: PopupItem): void {
     const hass = this._navbarCard._hass;
+    const row = this._root?.querySelector<HTMLElement>(`.st-menu-row[data-i="${this._items.indexOf(item)}"]`);
+    const r = row?.getBoundingClientRect(), m = this._menu()?.getBoundingClientRect();
+    this._subAt = r && m ? { top: r.top, right: m.right } : undefined;
     this._top = this._items;
     this._subTitle = processTemplate<string>(hass, this._navbarCard, item.data.label) || '';
     this._items = ((item.data.submenu ?? []) as PopupItemDef[])
@@ -478,7 +493,12 @@ export class StMenu {
         el.style.height = '';
         el.style.maxHeight = '';
       }
-      this._place();
+      // (a submenu: its Back row where the row that opened it was; back: where the menu first opened)
+      const back = this._top ? m.querySelector<HTMLElement>('.st-menu-back') : null;
+      if (back && this._subAt) {
+        const off = back.getBoundingClientRect().top - m.getBoundingClientRect().top;
+        this._place({ top: this._subAt.top - off, right: this._subAt.right });
+      } else this._place();
       if (reducedMotion()) return;
       const now = m.getBoundingClientRect();
       try {

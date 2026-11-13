@@ -287,6 +287,9 @@ async function card(config, states, calls = []) {
   ok('…tapped: its rows in the same menu, a Back row (its label) first, nothing run, still open', rows().length === 4 && rows()[0].classList.contains('st-menu-back')
     && rows()[0].querySelector('.st-menu-label')?.textContent === 'Sections' && rows()[3].querySelector('.st-menu-check svg') && !actions.length && !!r.querySelector('.st-menu.visible'),
     rows().map(x => x.textContent.trim()));
+  // (the row that opened it was at 500, the menu's right edge 292; its Back row 10 below the menu's top)
+  ok('…opened from its row: the Back row where Sections was, the menu\'s right edge kept (not dropped to the button)',
+    r.querySelector('.st-menu').style.top === '490px' && r.querySelector('.st-menu').style.left === '12px', [r.querySelector('.st-menu').style.top, r.querySelector('.st-menu').style.left]);
   ok('…the rows slid in from the right, the glass resized, a tick', anims.some(an => an.el.classList.contains('st-menu-body') && /translateX\(28px\)/.test(an.frames[0].transform))
     && anims.some(an => an.el.classList.contains('st-menu') && an.frames[0].width) && ticks.includes('selection'), anims.map(an => an.frames[0]));
   anims.length = 0;
