@@ -487,6 +487,8 @@ export class StMenu {
     this._navbarCard.updateComplete.then(() => {
       const m = this._menu();
       if (!m) return;
+      // (the row the tap that opened it lit is drawn again as another - the submenu's first, say: nothing lit, ST)
+      this._root?.querySelectorAll('.st-menu-row.active').forEach(row => row.classList.remove('active'));
       for (const el of [m, this._shadow()]) {
         if (!el) continue;
         el.style.width = '';
